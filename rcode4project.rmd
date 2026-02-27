@@ -142,4 +142,5 @@ stars1 <- stars %>% mutate(
   select(-surban, -classt, -thighd, -gender, -race, -tcaree, -tgen, -freelu, -trace,
          -tlists, -wordsk, -readbs, -motivr, -selfco, -treads, -mathbs, -starts_with("gk"))
 
+summary(stars1)
 ```
