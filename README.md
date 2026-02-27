@@ -21,13 +21,6 @@ df <- read.table("STAR.tab", header = TRUE, sep = "\t")
 ```
 
 
-## Structure
-
-- `STAR.tab` – raw datasets  
-- `code/` – scripts for data cleaning, modeling, and analysis  
-- `report/` – R Markdown files for the final report  
-- `output/` – generated figures and results  
-
 ## Reproducibility
 
 All analyses are written in R and organized to allow full reproducibility.  Please pull the latest version of the repository before making changes.
