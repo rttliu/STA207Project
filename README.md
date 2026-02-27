@@ -25,13 +25,8 @@ To keep the project synchronized, all collaborators should commit and push their
 2. Check the modified files. If it displays an 'M' at the capital, then it is modified.
 3. Click **Commit**.
 4. Enter a clear commit message describing your changes (e.g., "Update data cleaning script").
-5. Click **Commit**, then click **Push** to upload changes to GitHub.
+5. Click **Commit**, then click **Push** to upload changes to GitHub. (You do not have to select the file and click Push)
 
-Before starting new work, make sure that you have installed the **Git Bash** app, and use this to pull the latest updates from the repository to avoid merge conflicts:
-
-```bash
-git pull
-```
 
 ## Reproducibility
 
