@@ -140,5 +140,4 @@ stars1 <- stars %>% mutate(
   # Delete the converted raw variables and analysis indicators that are no longer needed; here, we only keep the math scores for performance variables
   select(-surban, -classt, -thighd, -gender, -race, -tcaree, -tgen, -freelu, -trace,
          -tlists, -wordsk, -readbs, -motivr, -selfco, -treads, -mathbs, -starts_with("gk"))
-summary(stars)
 ```
