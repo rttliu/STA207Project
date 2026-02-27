@@ -143,4 +143,5 @@ stars1 <- stars %>% mutate(
          -tlists, -wordsk, -readbs, -motivr, -selfco, -treads, -mathbs, -starts_with("gk"))
 
 summary(stars1)
+str(stars1)
 ```
