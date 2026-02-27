@@ -4,7 +4,7 @@ This repository contains the group project for STA207. The project focuses on st
 
 ## Structure
 
-- `STAR.tab` – raw and processed datasets  
+- `STAR.tab` – raw datasets  
 - `code/` – scripts for data cleaning, modeling, and analysis  
 - `report/` – R Markdown files for the final report  
 - `output/` – generated figures and results  
