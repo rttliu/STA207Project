@@ -2,21 +2,37 @@
 
 This repository contains the group project for STA207. The project focuses on statistical modeling, analysis, and reproducible reporting. All code, data processing steps, and final results are maintained here to ensure transparency and collaborative development.
 
-## Structure
+## How to Run the Project
 
-- `STAR.tab` – raw datasets  
-- `code/` – scripts for data cleaning, modeling, and analysis  
-- `report/` – R Markdown files for the final report  
-- `output/` – generated figures and results  
+To ensure reproducibility, all collaborators should clone the repository and run the analysis from the project root directory.
+
+1. In RStudio, go to: File → New Project → Version Control → Git  
+2. Use the following repository URL: https://github.com/rttliu/STA207Project.git
+3. Choose a local directory and click **Create Project**.
+
+After cloning, confirm that the project root contains: README.md, STAR.tab, code/, report/, and output/.
+To load the dataset, run the following in R from the project root:
+
+```r
+df <- read.table("STAR.tab", header = TRUE, sep = "\t")
+```
+
+## How to Update the Repository
+
+To keep the project synchronized, all collaborators should commit and push their local changes after completing updates.
+
+1. In RStudio, open the **Git** tab (top-right panel).
+2. Check the modified files. If it displays an 'M' at the capital, then it is modified.
+3. Click **Commit**.
+4. Enter a clear commit message describing your changes (e.g., "Update data cleaning script").
+5. Click **Commit**, then click **Push** to upload changes to GitHub.
+
+Before starting new work, make sure that you have installed the **Git Bash** app, and use this to pull the latest updates from the repository to avoid merge conflicts:
+
+```bash
+git pull
+```
 
 ## Reproducibility
 
-All analyses are written in R and organized to allow full reproducibility.  
-Please pull the latest version of the repository before making changes.
-
-## Collaboration
-
-This is a collaborative repository. Contributors should:
-
-1. Pull the latest updates before editing  
-2. Commit with clear, concise messages
+All analyses are written in R and organized to allow full reproducibility.  Please pull the latest version of the repository before making changes.
