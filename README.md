@@ -30,12 +30,4 @@ df <- read.table("STAR.tab", header = TRUE, sep = "\t")
 
 ## Reproducibility
 
-All analyses are written in R and organized to allow full reproducibility.  
-Please pull the latest version of the repository before making changes.
-
-## Collaboration
-
-This is a collaborative repository. Contributors should:
-
-1. Pull the latest updates before editing  
-2. Commit with clear, concise messages
+All analyses are written in R and organized to allow full reproducibility.  Please pull the latest version of the repository before making changes.
