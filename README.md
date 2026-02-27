@@ -21,11 +21,12 @@ df <- read.table("STAR.tab", header = TRUE, sep = "\t")
 
 To keep the project synchronized, all collaborators should commit and push their local changes after completing updates.
 
-1. In RStudio, open the **Git** tab (top-right panel).
-2. Check the modified files. If it displays an 'M' at the capital, then it is modified.
-3. Click **Commit**.
-4. Enter a clear commit message describing your changes (e.g., "Update data cleaning script").
-5. Click **Commit**, then click **Push** to upload changes to GitHub. (You do not have to select the file and click Push)
+1. If you amend any R code, please re-render the document by clicking **Knit**. For minor formatting or structural changes, it is not necessary to wait for the entire document to finish compiling. But make sure it is reproductible.
+2. In RStudio, open the **Git** tab (top-right panel).
+3. Check the modified files. If it displays an 'M' at the capital, then it is modified.
+4. Click **Commit**.
+5. Enter a clear commit message describing your changes (e.g., "Update data cleaning script").
+6. Click **Commit**, then click **Push** to upload changes to GitHub. (You do not have to select the file and click Push)
 
 
 ## Reproducibility
