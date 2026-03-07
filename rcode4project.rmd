@@ -141,3 +141,31 @@ stars1 <- stars %>% mutate(
   select(-surban, -classt, -thighd, -gender, -race, -tcaree, -tgen, -freelu, -trace,
          -tlists, -wordsk, -readbs, -motivr, -selfco, -treads, -mathbs, -starts_with("gk"))
 ```
+
+
+```{r}
+# Plots and Graphs
+library(ggplot2)
+ggplot(data=stars1, mapping=aes(y=math_score,x=grade,fill=class_type))+geom_boxplot(na.rm=TRUE)+xlab('Grade Level')+ylab('Math Scores')+ggtitle('Math Scores by Level and Class Type')
+
+# Table1 Summary Statistics
+library(table1)
+library(tableone)
+VoI <- c('math_score')
+Strat <- c('grade','class_type')
+CreateTableOne(vars = VoI, strata=Strat,data=stars1)
+CreateTableOne(vars = VoI, strata=c('student_race','student_gender'), data=stars1)
+CreateTableOne(vars = VoI, strata=c('free_lunch'),data=stars1)
+
+
+df_clean <- stars1 %>%
+  filter(!is.na(grade))
+df_clean <- df_clean %>%
+  filter(!is.na(class_type))
+df_clean <- df_clean %>% filter(!is.na(area_type))
+
+table1(~math_score|class_type,data=df_clean)
+table1(~math_score|grade,data=df_clean)
+table1(~math_score|area_type, data=df_clean)
+```
+
