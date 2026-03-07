@@ -7,6 +7,37 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+pretty_label <- function(x) {
+  x <- as.character(x)
+  dict <- c(
+    area_type = "Area Type",
+    class_type = "Class Type",
+    teacher_degree = "Teacher's Degree",
+    teacher_career = "Teacher's Career Stage",
+    student_gender = "Student's Gender",
+    teacher_gender = "Teacher's Gender",
+    free_lunch = "Free Lunch Status",
+    teacher_race = "Teacher's Race",
+    student_race = "Student's Race",
+    math_score = "Math Score",
+    "class_type * grade" = "Class × Grade"
+  )
+  out <- ifelse(x %in% names(dict), dict[x], x)
+  out <- gsub("_", " ", out)
+  out <- trimws(out)
+  out <- sapply(strsplit(out, " +"), function(w) {
+    paste0(toupper(substring(w, 1, 1)), substring(w, 2), collapse = " ")
+  })
+  unname(out)
+}
+
+fmt_p <- function(p, digits = 3, threshold = 1e-3) {
+  if (is.na(p)) return(NA_character_)
+  if (p < threshold) return(paste0("< ", formatC(threshold, format = "f", digits = digits)))
+  formatC(p, format = "f", digits = digits)
+}
+
+options(warn = -1)
 ```
 
 
@@ -16,12 +47,18 @@ knitr::opts_chunk$set(echo = TRUE)
 ### Load necessary libraries, covering data processing, string manipulation, visualization, and diagnostic analysis
 library(stringr)
 library(dplyr)
+library(tableone)
 library(tidyr)
 library(patchwork)
 library(purrr)
 library(rcompanion)
 library(psych)
+library(ggplot2)
 library(dlookr)
+library(modelsummary)
+library(broom)
+library(forcats)
+library(ggplot2)
 ```
 
 
@@ -69,7 +106,7 @@ stars <- star %>%
               values_from = value) %>%
   # Convert the grade column into an ordered factor
   mutate(grade = dplyr::recode(grade, k = "K"),
-         grade = factor(grade, levels = c("K", "1", "2", "3"), ordered = TRUE))
+         grade = factor(grade, levels = c("K", "1", "2", "3"), ordered = FALSE))
 
 ```
 
@@ -142,30 +179,238 @@ stars1 <- stars %>% mutate(
          -tlists, -wordsk, -readbs, -motivr, -selfco, -treads, -mathbs, -starts_with("gk"))
 ```
 
+```{r, width = 10, height = 10}
+library(patchwork)
+options(warn = -1)
+cat_vars <- c("area_type", "class_type", "teacher_degree", "teacher_career",
+              "student_gender", "teacher_gender", "free_lunch", "teacher_race", "student_race")
+make_all_plots <- function(df, cont, cats, ncol = 3) {
+  cont_lab <- pretty_label(cont)
+  one_cat <- function(cat_var) {
+    d <- dplyr::filter(df, !is.na(.data[[cat_var]]), !is.na(.data[[cont]]))
+    if (nrow(d) == 0) return(NULL)
+
+    p <- kruskal.test(stats::as.formula(paste(cont, "~", cat_var)), data = d)$p.value
+    p_txt <- fmt_p(p)
+    y <- stats::quantile(d[[cont]], c(.01, .99), na.rm = TRUE)
+    cat_lab <- pretty_label(cat_var)
+
+    p1 <- ggplot2::ggplot(d,
+      ggplot2::aes(.data[[cat_var]], .data[[cont]], fill = .data[[cat_var]])) +
+      ggplot2::geom_boxplot(outlier.alpha = .3, outlier.size = .8, na.rm = TRUE) +
+      ggplot2::coord_cartesian(ylim = y) +
+      ggplot2::labs(title = paste0(cat_lab, " (p = ", p_txt, ")"),
+        x = NULL, y = cont_lab) +
+      ggplot2::theme_bw(base_size = 9) +
+      ggplot2::theme(legend.position = "none")
+
+    p2 <- ggplot2::ggplot(d,
+      ggplot2::aes(.data[[cont]], fill = .data[[cat_var]], color = .data[[cat_var]])) +
+      ggplot2::geom_density(alpha = .35, linewidth = .6, na.rm = TRUE) +
+      ggplot2::labs(x = cont_lab, y = "Density") +
+      ggplot2::theme_bw(base_size = 9)+
+      ggplot2::theme(legend.position = "none")
+    patchwork::wrap_plots(p1, p2, ncol = 2, widths = c(1, 1.15))
+  }
+
+  plots <- Filter(Negate(is.null), lapply(cats, one_cat))
+
+  patchwork::wrap_plots(plots, ncol = ncol) +
+  patchwork::plot_annotation(
+    title = paste0("Distributions of ", cont_lab, " under different settings"),
+    subtitle = "Kruskal–Wallis test p-values are reported in panel titles",
+    theme = ggplot2::theme(
+      plot.title = ggplot2::element_text(hjust = 0.5),
+      plot.subtitle = ggplot2::element_text(hjust = 0.5))
+  )
+}
+
+make_all_plots(stars1, "math_score", cat_vars)
+```
 
 ```{r}
 # Plots and Graphs
 library(ggplot2)
-ggplot(data=stars1, mapping=aes(y=math_score,x=grade,fill=class_type))+geom_boxplot(na.rm=TRUE)+xlab('Grade Level')+ylab('Math Scores')+ggtitle('Math Scores by Level and Class Type')
-
-# Table1 Summary Statistics
-library(table1)
-library(tableone)
-VoI <- c('math_score')
-Strat <- c('grade','class_type')
-CreateTableOne(vars = VoI, strata=Strat,data=stars1)
-CreateTableOne(vars = VoI, strata=c('student_race','student_gender'), data=stars1)
-CreateTableOne(vars = VoI, strata=c('free_lunch'),data=stars1)
-
-
-df_clean <- stars1 %>%
-  filter(!is.na(grade))
-df_clean <- df_clean %>%
-  filter(!is.na(class_type))
-df_clean <- df_clean %>% filter(!is.na(area_type))
-
-table1(~math_score|class_type,data=df_clean)
-table1(~math_score|grade,data=df_clean)
-table1(~math_score|area_type, data=df_clean)
+stars1 <- stars1 %>%
+  mutate(class_type = case_when(
+    class_type %in% c("Regular class", "Regular + aide") ~ "Regular",
+    TRUE ~ class_type
+  )) %>%
+  mutate(class_type = as.factor(class_type))
+ggplot(data=stars1, mapping=aes(y=math_score,x=grade,fill=class_type)) +
+   geom_boxplot(na.rm=TRUE) + 
+   xlab('Grade Level')+ ylab('Math Scores') + 
+   ggtitle('Math Scores by Level and Class Type')
 ```
 
+
+
+```{r}
+
+all_vars <- c("math_score", "class_type", "grade", "free_lunch", 
+              "student_race", "area_type", "teacher_degree", "teacher_gender")
+
+stars_clean <- stars1[complete.cases(stars1[, all_vars]), ]
+
+model_1 <- lm(math_score ~ class_type * grade, data = stars_clean)
+model_2 <- lm(math_score ~ class_type * grade + free_lunch, data = stars_clean)
+model_3 <- lm(math_score ~ class_type * grade + free_lunch + student_race, data = stars_clean)
+model_4 <- lm(math_score ~ class_type * grade + free_lunch + student_race + area_type, data = stars_clean)
+model_5 <- lm(math_score ~ class_type * grade + free_lunch + student_race + area_type + teacher_degree, data = stars_clean)
+model_6 <- lm(math_score ~ class_type * grade + free_lunch + student_race + area_type + teacher_degree + teacher_gender, data = stars_clean)
+
+models <- list("M1" = model_1, "M2" = model_2, "M3" = model_3, "M4" = model_4, "M5" = model_5, "M6" = model_6)
+
+model_note <- c("M1: Baseline", "M2: + Free lunch", "M3: + Student race",
+  "M4: + Area type", "M5: + Teacher degree", "M6: + Teacher gender")
+
+keep_terms <- c("class_typeSmall class", "class_typeSmall class:grade1",
+  "class_typeSmall class:grade2", "class_typeSmall class:grade3",
+  "grade1", "grade2", "grade3")
+
+term_labels <- c(
+  "class_typeSmall class" = "Small class",
+  "class_typeSmall class:grade1" = "Grade 1 × Small class",
+  "class_typeSmall class:grade2" = "Grade 2 × Small class",
+  "class_typeSmall class:grade3" = "Grade 3 × Small class",
+  "grade1" = "Grade 1",
+  "grade2" = "Grade 2",
+  "grade3" = "Grade 3"
+)
+
+coef_df <- imap_dfr(models, ~{
+  tidy(.x, conf.int = TRUE) %>%
+    mutate(model = .y)
+}) %>%
+  filter(term %in% keep_terms) %>%
+  mutate(term_label = recode(term, !!!term_labels),
+    term_group = case_when(term == "class_typeSmall class" ~ "Treatment main effect",
+      str_detect(term, "class_typeSmall class:") ~ "Treatment × grade",
+      str_detect(term, "^grade") ~ "Grade main effect"),
+    model = factor(model, levels = c("M1", "M2", "M3", "M4", "M5", "M6"))) %>%
+  group_by(term) %>%
+  arrange(model, .by_group = TRUE) %>%
+  mutate(pct_change_prev = 100 * (estimate - lag(estimate)) / abs(lag(estimate)),
+    label_change = case_when(
+      row_number() == 1 ~ "Base",
+      is.infinite(pct_change_prev) | is.nan(pct_change_prev) ~ "",
+      TRUE ~ sprintf("%+.1f%%", pct_change_prev))) %>%
+  ungroup() %>%
+  mutate(model = fct_rev(model))
+
+
+coef_df <- coef_df %>%
+  group_by(term_label) %>%
+  mutate(xmin = min(conf.low), xmax = max(conf.high), xrange = xmax - xmin, label_x = estimate + 0.05 * xrange) %>% ungroup()
+
+
+p <- ggplot(coef_df, aes(x = estimate, y = model, color = term_group)) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high)) +
+  geom_point(size = 2.4) +
+  geom_text(aes(x = label_x, label = label_change), size = 3, hjust = 0, color = "black") +
+  facet_wrap(~ term_label, scales = "free_x", ncol = 3) +
+   labs(title = "Coefficient stability across nested models",
+    subtitle = paste("Baseline model (M1): Math Score ~ Class Type * Grade",
+      "Labels show % change relative to the previous model", sep = "\n"),
+    x = "Coefficient estimate (95% CI)", y = NULL,
+    caption = paste("M1: Class Type * Grade", "M2: + Free Lunch Status", "M3: + Student's Race",
+      "M4: + Area Type", "M5: + Teacher's Degree", "M6: + Teacher's Gender", sep = "   |   "))+
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5),
+  plot.subtitle = element_text(hjust = 0.5)) +
+  coord_cartesian(clip = "off")
+p
+```
+
+```{r}
+
+wide <- stars1 %>% mutate(obs = !is.na(math_score)) %>%
+  select(student_id, grade, obs) %>%
+  pivot_wider(names_from = grade, values_from = obs)
+
+wide <- wide %>% mutate(K = ifelse(is.na(K), FALSE, K),
+    `1` = ifelse(is.na(`1`), FALSE, `1`),
+    `2` = ifelse(is.na(`2`), FALSE, `2`),
+    `3` = ifelse(is.na(`3`), FALSE, `3`))
+
+wide <- wide %>% mutate(pattern = paste0(K*1, `1`*1, `2`*1, `3`*1))
+
+wide <- wide %>% filter(pattern != "0000") %>%
+  mutate(complete = ifelse(pattern == "1111", "Complete", "Incomplete"))
+
+baseline_vars <- c("math_score", "free_lunch", "student_race",
+  "student_gender", "class_type", "area_type")
+
+stu_base <- stars1 %>% arrange(student_id, grade) %>%
+  group_by(student_id) %>% slice(1) %>%
+  ungroup() %>%
+  select(student_id, all_of(baseline_vars)) %>%
+  left_join(wide %>% select(student_id, complete), by = "student_id")
+
+tab <- CreateTableOne(vars = baseline_vars, strata = "complete",
+  data = stu_base, test = TRUE)
+print(tab, showAllLevels = TRUE, smd = TRUE)
+```
+
+
+```{r}
+stars_plot <- stars1 %>%
+  left_join(wide %>% select(student_id, pattern), by = "student_id") %>%
+  filter(!is.na(pattern), pattern != "0000", !is.na(math_score))
+
+pattern_order <- stars_plot %>%
+  distinct(student_id, pattern) %>%
+  count(pattern, sort = TRUE) %>%
+  pull(pattern)
+
+pattern_order <- c("1111", setdiff(pattern_order, "1111"))
+
+stars_plot <- stars_plot %>%
+  mutate(pattern = factor(pattern, levels = pattern_order))
+
+p1 <- ggplot(stars_plot, aes(x = pattern, y = math_score, fill = pattern)) +
+  geom_boxplot(outlier.alpha = 0.3) +
+  coord_flip() +
+  labs(title = "Math score distribution by missingness pattern",
+    subtitle = "Scores pooled across grades K–3", x = "Missingness pattern", y = "Math score") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    legend.position = "none")
+    
+race_plot <- stars1 %>%
+  left_join(wide %>% select(student_id, pattern), by = "student_id") %>%
+  filter(!is.na(pattern), pattern != "0000") %>%
+  distinct(student_id, pattern, student_race)
+race_plot <- race_plot %>%
+  mutate(pattern = factor(pattern, levels = pattern_order))
+p2 <- ggplot(race_plot, aes(x = pattern, fill = student_race)) +
+  geom_bar(position = "fill") +
+  labs(title = "Student race composition by missingness pattern", x = "Missingness pattern",
+    y = "Proportion", fill = "Student race") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5))+ coord_flip()
+class_plot <- stars1 %>%
+  left_join(wide %>% select(student_id, pattern), by = "student_id") %>%
+  filter(!is.na(pattern), pattern != "0000", !is.na(class_type)) %>%
+  distinct(student_id, pattern, class_type)
+
+class_plot <- class_plot %>%
+  mutate(pattern = factor(pattern, levels = pattern_order))
+
+p3 <- ggplot(class_plot, aes(x = pattern, fill = class_type)) +
+  geom_bar(position = "fill") +
+  labs(title = "Class type composition by missingness pattern",
+    x = "Missingness pattern", y = "Proportion", fill = "Class type") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5))+ coord_flip()
+pattern_count <- stars_plot %>%
+  distinct(student_id, pattern) %>%
+  count(pattern, sort = TRUE)
+p1
+# p2 | p3
+# pattern_count
+```
