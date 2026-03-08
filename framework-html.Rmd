@@ -204,25 +204,14 @@ Project STAR (Student/Teacher Achievement Ratio) was one of the most important l
 
 In the STAR experiment, students entering kindergarten were randomly assigned within schools to one of three classroom types: small classes (about 13–17 students), regular classes (about 22–25 students), and regular classes with a full-time teacher’s aide. Teachers were also randomly assigned to these class types. The original design intended for students to stay in their assigned treatment group after entering the study. 
 
-Class size has long been a question for educators. **Smaller classes** may help young children by giving them more individual attention and improving classroom participation. The potential benefits of class size may be especially important in the **early grades**. However, reducing class size is expensive, since it requires more teachers, more classrooms and funding. This is a big challenge for underserved schools or districts, becoming an important equity concern in education. For this reason, a question arises: **whether the gains of small classes are worthy to justify the substantial costs of implementation**. [@schanzenbach2007star]
+Class size has long been a question for educators. **Smaller classes** may help young children by giving them more individual attention and improving classroom participation. The potential benefits of class size may be especially important in the **early grades**. However, reducing class size is expensive, since it requires more teachers, more classrooms and funding. This is a big challenge for underserved schools or districts, and had become an important equity concern in education. For this reason, a question arises: **whether the gains of small classes are worthy to justify the substantial costs of implementation**. [@schanzenbach2007star]
 
 Students were intended to stay in the same class-type assignment throughout the whole process. So the study was began with randomization, and all assignments was conducted within schools, the design helped balance school-level differences across treatment groups. This can be a good background for interpreting casual effects.
 
-Although STAR began with randomization, later studies have claimed that it is **not a completely randomized experiments**. Because the experiments are affected by factors such as student transfers, classroom reassignment, imperfect compliance, teacher changes, and missing follow-up data. Therefore, studies must address these post-randomization outcomes carefully.
+Although STAR began with randomization, later studies have claimed that it is **not a completely randomized experiments**. Because the experiments are affected by factors such as student transfers, classroom reassignment, imperfect compliance, teacher changes, and missing follow-up data. When missing of the data is not at random, it can generate selection bias. Therefore, studies must address these post-randomization outcomes carefully.
 
-## Violations of Randomizations - Selection Bias
 
-When missing of the data is not at random, it can generate selection bias. One persistent concern of STAR Project is that there was substantial sample loss in the later years of the study, and this attrition may not have been entirely random. More broadly, @hanushek1999star identified attrition, crossovers, and selective test taking as threats to the integrity of STAR’s original randomization, and @filges2018classsize note that these remain central concerns in later assessments of the experiment.
-
-- **Attrition is related to academic performance or student disadvantage.**
-
-@ding2006dynamic shown that attrition in Project STAR was not random with respect to student performance. **Students who later attrited had significantly lower kindergarten achievement**, and that among students on free lunch, those who left the sample scored significantly **lower in mathematics** than comparable students who remained. In terms of this, if lower-performing students are more likely to leave the sample, the observed students may no longer represent randomization.
-
-- **Attrition is also related to treatment status.**
-
-@krueger1999star shown that attrition from STAR was substantial. In a subsample with initial enrollment logs, 10.4% of students assigned to small classes were missing by the start of kindergarten, compared with 14.3% of those assigned to regular classes, suggesting that some students may have been withdrawn because they were not assigned to a small class. In addition, @ding2006dynamic show that the pattern of **attrition differed between class types within and across schools**. These findings supported that the observed small-class and regular-class groups in later grades are no longer simply the originally randomized groups, but the outcome of initial random assignment followed by differential attrition and movement across class types.
-
-## Other main empirical complications
+## Some empirical complications violating randomization
 
 - **Student mobility / transfers.**
 
@@ -240,6 +229,18 @@ When missing of the data is not at random, it can generate selection bias. One p
 
 @cascio2007first argued that scores may depend also on the characteristics of classmates. Since classroom composition can affect learning outcomes, peer effects may operate alongside the direct effect of small classes and make interpretation of the treatment difficult.
 
+## Important Violations of Randomization - Selection Bias
+
+One persistent concern of STAR Project is that there was substantial sample loss in the later years of the study, and this attrition may not have been entirely random. More broadly, @hanushek1999star identified attrition, crossovers, and selective test taking as threats to the integrity of STAR’s original randomization, and @filges2018classsize note that these remain central concerns in later assessments of the experiment.
+
+- **Attrition is related to academic performance or student disadvantage.**
+
+@ding2006dynamic shown that attrition in Project STAR was not random with respect to student performance. **Students who later attrited had significantly lower kindergarten achievement**, and that among students on free lunch, those who left the sample scored significantly **lower in mathematics** than comparable students who remained. In terms of this, if lower-performing students are more likely to leave the sample, the observed students may no longer represent randomization.
+
+- **Attrition is also related to treatment status.**
+
+@krueger1999star shown that attrition from STAR was substantial. In a subsample with initial enrollment logs, 10.4% of students assigned to small classes were missing by the start of kindergarten, compared with 14.3% of those assigned to regular classes, suggesting that some students may have been withdrawn because they were not assigned to a small class. In addition, @ding2006dynamic show that the pattern of **attrition differed between class types within and across schools**. These findings supported that the observed small-class and regular-class groups in later grades are no longer simply the originally randomized groups, but the outcome of initial random assignment followed by differential attrition and movement across class types.
+
 # Research Questions
 
 ## Assumptions
@@ -248,15 +249,36 @@ When missing of the data is not at random, it can generate selection bias. One p
 
 A first assumption is no interference. Each classroom’s potential outcome is assumed to be independent of the treatment assigned to other classrooms. The second assumption is no hidden versions of treatment. Small class should not contain multiple hidden versions of treatment.
 
+- **Positivity:**
+
+Within the relevant strata of background characteristics such as grade, race, free lunch status, and school context, there should be sufficient overlap so that no subgroup is deterministically assigned to only one class type.
+
+- **Conditional ignorability of attrition:**
+
+Conditional on the observed baseline covariates, treatment status, prior achievement, and other auxiliary variables related to student performance and participation, whether a student remains observed is assumed to be independent of the missing potential math outcomes.
+
+- **Random assignment at baseline:**
+
+At study entry, students were randomly assigned within schools to class types, so baseline treatment assignment can be treated as independent of students’ pre-treatment characteristics and potential outcomes.
+
+- **Exclusive Restriction:**
+
+Conditional on the class type actually received, the original random assignment affects math achievement only through treatment receipt, not through any direct channel such as parental responses, administrative reassignment, compliance behavior, etc.
+
+## Questions of Interests
+
+- How robust are the estimated treatment effects under multiple missing-data imputation methods?
+
+- Whether missingness in math outcomes can be explained by observed background and prior-achievement variables, making a MAR-type assumption more plausible.
+
+- Whether students assigned to smaller classes achieve higher mathematics scores than those in regular classes and whether this relationship differs across grades K--3 after resolving selection bias.
 
 # Exploratory Data Analysis
-
 
 ```{r load-data}
 # Please ensure the file exists at this path
 df <- read.table("STAR.tab", header = TRUE, sep = "\t")
 ```
-
 
   
 ```{r phase-1}
@@ -302,6 +324,8 @@ stars <- star %>%
 
 
 ## Data Cleaning and Preprocessing
+
+The dataset downloaded from Harvard Dataverse was first examined. It contains 11,601 observations and 379 variables, with a total of 2,477,601 missing entries. Given its large size and substantial amount of missing data, it is necessary to retain only variables relevant to the analysis and to address missingness carefully.
 
 ```{r phase-3}
 ## Phase 3: Renaming and Variable Type Conversion
@@ -400,7 +424,7 @@ If these relationships hold, failing to control for $Z$ may bias estimates of th
 
 ### Verify **$X \rightarrow Y$:**
 
-```{r, fig.width=6, fig.height=4, out.width='100%', dpi = 125}
+```{r}
 # Plots and Graphs
 library(ggplot2)
 stars1 <- stars1 %>%
@@ -420,7 +444,7 @@ The boxplots show the distribution of students’ mathematics scores by grade le
 
 ### Examine potential variables that **$Z \rightarrow Y$:**
 
-```{r, fig.width=7.5, fig.height=4, out.width='100%', dpi = 125}
+```{r, width = 10, height = 10}
 library(patchwork)
 options(warn = -1)
 cat_vars <- c("area_type", "class_type", "teacher_degree", "teacher_career",
@@ -442,14 +466,14 @@ make_all_plots <- function(df, cont, cats, ncol = 3) {
       ggplot2::coord_cartesian(ylim = y) +
       ggplot2::labs(title = paste0(cat_lab, " (p = ", p_txt, ")"),
         x = NULL, y = cont_lab) +
-      ggplot2::theme_bw(base_size = 11) +
+      ggplot2::theme_bw(base_size = 9) +
       ggplot2::theme(legend.position = "none")
 
     p2 <- ggplot2::ggplot(d,
       ggplot2::aes(.data[[cont]], fill = .data[[cat_var]], color = .data[[cat_var]])) +
       ggplot2::geom_density(alpha = .35, linewidth = .6, na.rm = TRUE) +
       ggplot2::labs(x = cont_lab, y = "Density") +
-      ggplot2::theme_bw(base_size = 11)+
+      ggplot2::theme_bw(base_size = 9)+
       ggplot2::theme(legend.position = "none")
     patchwork::wrap_plots(p1, p2, ncol = 2, widths = c(1, 1.15))
   }
@@ -480,7 +504,7 @@ In this case, Kruksal--Wallis p--value of **area type, free lunch status, studen
 
 ### Examine confounders that satistfies **$Z \leftarrow X \rightarrow Y$:**
 
-```{r, fig.width=6, fig.height=4, out.width='100%', dpi = 125}
+```{r}
 
 all_vars <- c("math_score", "class_type", "grade", "free_lunch", 
               "student_race", "area_type", "teacher_degree", "teacher_gender")
@@ -542,7 +566,7 @@ coef_df <- coef_df %>%
 p <- ggplot(coef_df, aes(x = estimate, y = model, color = term_group)) +
   geom_errorbarh(aes(xmin = conf.low, xmax = conf.high)) +
   geom_point(size = 2.4) +
-  geom_text(aes(x = label_x, label = label_change), size = 7.5, hjust = 0, color = "black") +
+  geom_text(aes(x = label_x, label = label_change), size = 3, hjust = 0, color = "black") +
   facet_wrap(~ term_label, scales = "free_x", ncol = 3) +
    labs(title = "Coefficient stability across nested models",
     subtitle = paste("Baseline model (M1): Math Score ~ Class Type * Grade",
@@ -550,7 +574,7 @@ p <- ggplot(coef_df, aes(x = estimate, y = model, color = term_group)) +
     x = "Coefficient estimate (95% CI)", y = NULL,
     caption = paste("M1: Class Type * Grade", "M2: + Free Lunch Status", "M3: + Student's Race",
       "M4: + Area Type", "M5: + Teacher's Degree", "M6: + Teacher's Gender", sep = "   |   "))+
-  theme_minimal(base_size = 15) +
+  theme_minimal(base_size = 12) +
   theme(legend.position = "none", plot.title = element_text(hjust = 0.5),
   plot.subtitle = element_text(hjust = 0.5)) +
   coord_cartesian(clip = "off")
@@ -580,13 +604,13 @@ In this plot, the largest changes occur after adding free lunch status, area typ
 
 In practice, these mechanisms cannot usually be distinguished with certainty from the observed data alone, especially in distinguishing MAR and MNAR. Therefore, rather than attempting to verify MAR directly, we assess its plausibility indirectly using the following diagnostic strategies:
 
-- **Assess whether missingness is explainable by observed data**: model the missingness indicator using baseline covariates, lagged outcomes, and other observed variables. If missingness can be substantially explained by observed information, the MAR assumption becomes more plausible.
+- **Assess whether missingness is explainable by observed data**: model the missingness indicator using baseline covariates, lagged outcomes, and other observed variables. If missingness can be substantially explained by observed information, the MAR assumption becomes more plausible. [@rubin1976inference]
 
-- **Include strong auxiliary variables**: add variables that are highly predictive of the missing outcome or of the missingness process into the imputation or likelihood-based model. This can reduce bias and strengthen the plausibility of MAR.
+- **Include strong auxiliary variables**: add variables that are highly predictive of the missing outcome or of the missingness process into the imputation or likelihood-based model. This can reduce bias and strengthen the plausibility of MAR. [@collins2001comparison]; [@white2011multiple]
 
-- **Check robustness under MAR-based methods**: compare results across approaches such as complete-case analysis, IPW, FIML, and MI under the same observed-data structure. Similar conclusions make MAR-based inference more credible.
+- **Check robustness under MAR-based methods**: compare results across approaches such as complete-case analysis, IPW, FIML, and MI under the same observed-data structure. Similar conclusions make MAR-based inference more credible. [@baraldi2010introduction]
 
-- **Conduct MNAR sensitivity analysis**: evaluate how conclusions change under plausible departures from MAR using methods such as pattern-mixture models, selection models, or delta-adjusted imputation. Stable results suggest that the main findings are not overly sensitive to violations of MAR.
+- **Conduct MNAR sensitivity analysis**: evaluate how conclusions change under plausible departures from MAR using methods such as pattern-mixture models, selection models, or delta-adjusted imputation. Stable results suggest that the main findings are not overly sensitive to violations of MAR. [@daniels2000simple]
 
 
 ### Proving data is not MCAR
@@ -601,7 +625,7 @@ We classified the K–3 observation patterns into five descriptive groups:
 - Patterns 1010, 1001, 0101, 0010, and 1011 were classified as **intermittent**, reflecting non-monotone missingness with reappearance after one or more missing waves. 
 - Pattern 0111 was separated as **no records in K**, because it there are a specific group of students who hasn't got kindergarten but observed continuously from Grade 1 onward.
 
-```{r, fig.width=6, fig.height=4, out.width='100%', dpi = 125}
+```{r}
 wide <- stars1 %>% mutate(obs = !is.na(math_score)) %>%
   select(student_id, grade, obs) %>%
   pivot_wider(names_from = grade, values_from = obs)
@@ -657,7 +681,7 @@ p3 <- ggplot(stars_plot2, aes(x = pattern_class, y = math_score, fill = pattern_
 p3 
 ``` 
 
-The boxplot shows clear differences in pooled math-score distributions across missingness types from kindergarten to Grade 3. The pooled math-score distributions suggest that complete cases, intermittent cases, have broadly similar achievement levels. However, the monotone attrition group has lower math score while the late-entry group shows the significantly higher math score among all categories. The pattern suggests that missingness type is related to student performance, which is inconsistent with a purely MCAR mechanism. Thus, missingness type itself is informative and should be analyzed specifically.
+The boxplot shows clear differences in pooled math-score distributions across missingness types from kindergarten to Grade 3. The pooled math-score distributions suggest that complete cases, intermittent cases, have broadly similar achievement levels. However, **the monotone attrition group has lower math score while the late-entry group shows significant higher math score among all categories**. The pattern suggests that missingness type is related to student performance, which is inconsistent with a purely MCAR mechanism. Thus, missingness type itself is informative and should be analyzed specifically.
 
 ## Examine whether missingness can be explained by observed variables
 
@@ -711,51 +735,12 @@ cor_df
 
 We examined the auxiliary variables including reading score (treads), word skills (wordsk), listening score (tlists), and lagged math scores. They have shown strong correlations with math achievement, which is informative for predicting missing math outcomes and can be included in the imputation model to reduce bias. This could be considered a case of satisfying the MAR assumption.
 
-# Data and Sample Construction
 
-## Data source and variables
-
-## Reshaping and longitudinal structure
-
-## Sample inclusion and exclusion rules
-
-# Missingness and Attrition Patterns
-
-## Missing-data taxonomy
-
-## Descriptive summaries of missingness
-
-## Attrition diagnostics
-
-# Descriptive Analysis
-
-## Distribution of math scores over grades
-
-## Mean trajectories by class type
-
-## Covariate patterns related to missingness
-
-# Inferential Strategy
-
-## Main modeling idea
-
-## Complete-case benchmark
-
-## Multiple imputation by chained equations (MICE)
-
-## Assumptions
-
-# Results
-
-## Main estimates
-
-## Interpretation
-
-## Secondary findings on attrition
+# Inferential Analysis
 
 # Sensitivity Analysis
 
-## Comparison to Inverse probability weighting (IPW)
+## Comparison to Other Methods
 
 ## Alternative sample definitions
 
