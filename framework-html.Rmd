@@ -6,8 +6,8 @@ output:
   html_document:
     toc: true
     toc_float:
-      collapsed: false
-      smooth_scroll: true
+       collapsed: true
+       smooth_scroll: true
     toc_depth: 3
     number_sections: true
     theme: flatly
@@ -111,7 +111,6 @@ blockquote {
   font-style: italic;
 }
 
-
 #TOC {
   font-size: 0.88em;
   border: 1px solid #e5e7eb;
@@ -119,12 +118,30 @@ blockquote {
   padding: 1em;
   background: #ffffff;
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+
+  /* 限制高度，超出后滚动 */
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+
+  /* 自定义滚动条（Webkit/Chrome/Edge） */
+  scrollbar-width: thin;                        /* Firefox */
+  scrollbar-color: #cbd5e1 transparent;         /* Firefox: thumb / track */
 }
 
-#TOC ul { padding-left: 1.2em; }
-#TOC li { line-height: 1.7; }
-#TOC a { color: #374151; text-decoration: none; }
-#TOC a:hover { color: #2563eb; }
+/* Chrome / Safari / Edge */
+#TOC::-webkit-scrollbar {
+  width: 5px;
+}
+#TOC::-webkit-scrollbar-track {
+  background: transparent;
+}
+#TOC::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 99px;
+}
+#TOC::-webkit-scrollbar-thumb:hover {
+  background-color: #2563eb;
+}
 
 img { border-radius: 6px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
 
@@ -424,7 +441,7 @@ If these relationships hold, failing to control for $Z$ may bias estimates of th
 
 ### Verify **$X \rightarrow Y$:**
 
-```{r}
+```{r, fig.width=6, fig.height=4, out.width = "100%" }
 # Plots and Graphs
 library(ggplot2)
 stars1 <- stars1 %>%
@@ -436,7 +453,13 @@ stars1 <- stars1 %>%
 ggplot(data=stars1, mapping=aes(y=math_score,x=grade,fill=class_type)) +
    geom_boxplot(na.rm=TRUE) + 
    xlab('Grade Level')+ ylab('Math Scores') + 
-   ggtitle('Math Scores by Level and Class Type')
+   ggtitle('Math Scores by Level and Class Type') +
+   theme_bw(base_size = 16) +
+   theme(plot.title = element_text(size = 18, hjust = 0.5),
+         axis.title = element_text(size = 16),
+         axis.text = element_text(size = 14),
+         legend.text = element_text(size = 14),
+         legend.title = element_text(size = 15))
 ```
 
 The boxplots show the distribution of students’ mathematics scores by grade level (K–3) and class type (small class/regular class). We can see that math scores increase steadily across grades. Also, students in small classes consistently exhibit slightly higher math scores than those in regular classes within the same grade. Thirdly, the difference between small classes and regular classes appears to persist across all grade levels, suggesting a potential interaction between grade and class type. In particular, the gap between the two class types appears to be slightly larger in lower grades. Thus, we can say that $X \rightarrow Y$ exists.
@@ -444,53 +467,41 @@ The boxplots show the distribution of students’ mathematics scores by grade le
 
 ### Examine potential variables that **$Z \rightarrow Y$:**
 
-```{r, width = 10, height = 10}
+```{r, fig.width=6, fig.height=4, out.width = "100%" }
 library(patchwork)
 options(warn = -1)
 cat_vars <- c("area_type", "class_type", "teacher_degree", "teacher_career",
               "student_gender", "teacher_gender", "free_lunch", "teacher_race", "student_race")
-make_all_plots <- function(df, cont, cats, ncol = 3) {
+library(ggdist)
+make_all_plots_violin <- function(df, cont, cats, ncol = 3) {
   cont_lab <- pretty_label(cont)
   one_cat <- function(cat_var) {
     d <- dplyr::filter(df, !is.na(.data[[cat_var]]), !is.na(.data[[cont]]))
     if (nrow(d) == 0) return(NULL)
-
-    p <- kruskal.test(stats::as.formula(paste(cont, "~", cat_var)), data = d)$p.value
-    p_txt <- fmt_p(p)
-    y <- stats::quantile(d[[cont]], c(.01, .99), na.rm = TRUE)
-    cat_lab <- pretty_label(cat_var)
-
-    p1 <- ggplot2::ggplot(d,
-      ggplot2::aes(.data[[cat_var]], .data[[cont]], fill = .data[[cat_var]])) +
-      ggplot2::geom_boxplot(outlier.alpha = .3, outlier.size = .8, na.rm = TRUE) +
+    p_txt <- fmt_p(kruskal.test(as.formula(paste(cont, "~", cat_var)), data = d)$p.value)
+    y <- quantile(d[[cont]], c(.01, .99), na.rm = TRUE)
+    ggplot2::ggplot(d, ggplot2::aes(.data[[cat_var]], .data[[cont]], fill = .data[[cat_var]])) +
+      ggplot2::geom_violin(trim = TRUE, alpha = 0.7, color = NA) +
+      ggplot2::geom_boxplot(width = 0.12, outlier.shape = NA, fill = "white", color = "grey30", alpha = 0.8) +
+      ggplot2::stat_summary(fun = mean, geom = "point", shape = 18, size = 2.5, color = "red") +
       ggplot2::coord_cartesian(ylim = y) +
-      ggplot2::labs(title = paste0(cat_lab, " (p = ", p_txt, ")"),
-        x = NULL, y = cont_lab) +
-      ggplot2::theme_bw(base_size = 9) +
-      ggplot2::theme(legend.position = "none")
-
-    p2 <- ggplot2::ggplot(d,
-      ggplot2::aes(.data[[cont]], fill = .data[[cat_var]], color = .data[[cat_var]])) +
-      ggplot2::geom_density(alpha = .35, linewidth = .6, na.rm = TRUE) +
-      ggplot2::labs(x = cont_lab, y = "Density") +
-      ggplot2::theme_bw(base_size = 9)+
-      ggplot2::theme(legend.position = "none")
-    patchwork::wrap_plots(p1, p2, ncol = 2, widths = c(1, 1.15))
+      ggplot2::labs(title = paste0(pretty_label(cat_var), " (p = ", p_txt, ")"), x = NULL, y = cont_lab) +
+      ggplot2::theme_bw(base_size = 13) +
+      ggplot2::theme(legend.position = "none",
+        plot.title = ggplot2::element_text(size = 13),
+        axis.title = ggplot2::element_text(size = 12),
+        axis.text = ggplot2::element_text(size = 11))
   }
-
   plots <- Filter(Negate(is.null), lapply(cats, one_cat))
-
   patchwork::wrap_plots(plots, ncol = ncol) +
-  patchwork::plot_annotation(
-    title = paste0("Distributions of ", cont_lab, " under different settings"),
-    subtitle = "Kruskal–Wallis test p-values are reported in panel titles",
-    theme = ggplot2::theme(
-      plot.title = ggplot2::element_text(hjust = 0.5),
-      plot.subtitle = ggplot2::element_text(hjust = 0.5))
-  )
+    patchwork::plot_annotation(
+      title = paste0("Distributions of ", cont_lab, " under different settings"),
+      subtitle = "Kruskal-Wallis p-values in panel titles | Red diamond = mean",
+      theme = ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5),
+        plot.subtitle = ggplot2::element_text(hjust = 0.5)))
 }
 
-make_all_plots(stars1, "math_score", cat_vars)
+make_all_plots_violin(stars1, "math_score", cat_vars)
 ```
 
 The figure compares math score distributions across several student, teacher, and school characteristics. As we can see, some of the distribution of data has a strong violations of normality. So we use Kruskal--Wallis test to evaluate whether math scores differ across groups. Unlike the ANOVA, Kruskal--Wallis it is a nonparametric method based on ranks, which means that there are no normality assumption of data.
@@ -504,7 +515,7 @@ In this case, Kruksal--Wallis p--value of **area type, free lunch status, studen
 
 ### Examine confounders that satistfies **$Z \leftarrow X \rightarrow Y$:**
 
-```{r}
+```{r, fig.width=6, fig.height=4, out.width = "100%" }
 
 all_vars <- c("math_score", "class_type", "grade", "free_lunch", 
               "student_race", "area_type", "teacher_degree", "teacher_gender")
@@ -566,7 +577,7 @@ coef_df <- coef_df %>%
 p <- ggplot(coef_df, aes(x = estimate, y = model, color = term_group)) +
   geom_errorbarh(aes(xmin = conf.low, xmax = conf.high)) +
   geom_point(size = 2.4) +
-  geom_text(aes(x = label_x, label = label_change), size = 3, hjust = 0, color = "black") +
+  geom_text(aes(x = label_x, label = label_change), size = 4, hjust = 0, color = "black") +
   facet_wrap(~ term_label, scales = "free_x", ncol = 3) +
    labs(title = "Coefficient stability across nested models",
     subtitle = paste("Baseline model (M1): Math Score ~ Class Type * Grade",
@@ -574,9 +585,14 @@ p <- ggplot(coef_df, aes(x = estimate, y = model, color = term_group)) +
     x = "Coefficient estimate (95% CI)", y = NULL,
     caption = paste("M1: Class Type * Grade", "M2: + Free Lunch Status", "M3: + Student's Race",
       "M4: + Area Type", "M5: + Teacher's Degree", "M6: + Teacher's Gender", sep = "   |   "))+
-  theme_minimal(base_size = 12) +
-  theme(legend.position = "none", plot.title = element_text(hjust = 0.5),
-  plot.subtitle = element_text(hjust = 0.5)) +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none",
+    plot.title = element_text(hjust = 0.5, size = 16),
+    plot.subtitle = element_text(hjust = 0.5, size = 13),
+    plot.caption = element_text(size = 11),
+    axis.title = element_text(size = 13),
+    axis.text = element_text(size = 12),
+    strip.text = element_text(size = 13)) +
   coord_cartesian(clip = "off")
 p
 ```
@@ -625,7 +641,7 @@ We classified the K–3 observation patterns into five descriptive groups:
 - Patterns 1010, 1001, 0101, 0010, and 1011 were classified as **intermittent**, reflecting non-monotone missingness with reappearance after one or more missing waves. 
 - Pattern 0111 was separated as **no records in K**, because it there are a specific group of students who hasn't got kindergarten but observed continuously from Grade 1 onward.
 
-```{r}
+```{r, fig.width=6, fig.height=4, out.width = "100%" }
 wide <- stars1 %>% mutate(obs = !is.na(math_score)) %>%
   select(student_id, grade, obs) %>%
   pivot_wider(names_from = grade, values_from = obs)
@@ -674,16 +690,19 @@ p3 <- ggplot(stars_plot2, aes(x = pattern_class, y = math_score, fill = pattern_
     subtitle = "Scores pooled across grades K–3",
     x = "Missingness type",
     y = "Math score") +
-  theme_bw() +
-  theme(plot.title = element_text(hjust = 0.5),
-    plot.subtitle = element_text(hjust = 0.5),
+  theme_bw(base_size = 14) +
+  theme(plot.title = element_text(hjust = 0.5, size = 16),
+    plot.subtitle = element_text(hjust = 0.5, size = 13),
+    axis.title = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
     legend.position = "none")
 p3 
 ``` 
 
 The boxplot shows clear differences in pooled math-score distributions across missingness types from kindergarten to Grade 3. The pooled math-score distributions suggest that complete cases, intermittent cases, have broadly similar achievement levels. However, **the monotone attrition group has lower math score while the late-entry group shows significant higher math score among all categories**. The pattern suggests that missingness type is related to student performance, which is inconsistent with a purely MCAR mechanism. Thus, missingness type itself is informative and should be analyzed specifically.
 
-## Examine whether missingness can be explained by observed variables
+### Examine whether missingness can be explained by observed variables
 
 ```{r}
 baseline_vars <- c("math_score", "free_lunch", "student_race",
@@ -748,7 +767,7 @@ We examined the auxiliary variables including reading score (treads), word skill
 
 ## Pseudo-missing cross-validation for imputation quality
 
-## Discussion of MNAR risk
+# Final Model
 
 # Discussion
 
