@@ -118,17 +118,24 @@ stars <- stars %>% rename(
   student_id = stdntid, birth_month = birthmon, birth_day = birthday, 
   birth_year = birthyea, teaching_years = tyears, class_size = classs, 
   math_score = tmaths, school_id = schid, teacher_id = tchid)
+stars_diag <- stars %>% rename(area_type = surban, class_type = classt, teacher_degree = thighd,
+    teacher_career = tcaree, student_gender = gender, teacher_gender = tgen,
+    free_lunch = freelu, teacher_race = trace, student_race = race)
 
-# Convert categorical variables into factors for subsequent statistical analysis
-stars[c("surban","classt","thighd","tcaree","gender","tgen","freelu","trace","race")] <- 
-  lapply(stars[c("surban","classt","thighd","tcaree","gender","tgen","freelu","trace","race")], factor)
+stars_diag[c("area_type","class_type","teacher_degree","teacher_career",
+             "student_gender","teacher_gender","free_lunch",
+             "teacher_race","student_race")] <- 
+  lapply(stars_diag[c("area_type","class_type","teacher_degree","teacher_career",
+                      "student_gender","teacher_gender","free_lunch",
+                      "teacher_race","student_race")], factor)
 
-# Perform preliminary diagnostic analysis on categorical data
-stars %>% dplyr::filter(if_all(where(is.factor), ~ !is.na(.))) %>% diagnose_category()
-
+stars_diag %>% dplyr::filter(if_all(where(is.factor), ~ !is.na(.))) %>% diagnose_category()
 ```
 
   
+Following the Project STAR codebook, we recoded several categorical variables and collapsed categories when the original coding was too sparse for stable analysis. In particular, student race and teacher race were simplified to Black vs. Non-Black, since the STAR documentation shows that racial categories other than White and Black were extremely rare in the data. Teacher degree was reduced to Below Master versus Master or above, because specialist and doctoral categories were infrequent relative to the dominant bachelor’s/master’s groups. Teacher career stage was also collapsed into Lower level and Upper level, since the original multi-level ladder structure was highly imbalanced in practice.
+
+
 ```{r phase-4}
 ## Phase 4: Feature Engineering and Variable Cleaning
 # Use case_when to create more descriptive categorical variables and delete unnecessary raw variables
@@ -175,9 +182,51 @@ stars1 <- stars %>% mutate(
     levels = c("Black", "Non-Black"))
 ) %>%
   # Delete the converted raw variables and analysis indicators that are no longer needed; here, we only keep the math scores for performance variables
-  select(-surban, -classt, -thighd, -gender, -race, -tcaree, -tgen, -freelu, -trace,
-         -tlists, -wordsk, -readbs, -motivr, -selfco, -treads, -mathbs, -starts_with("gk"))
+  select(-surban, -classt, -thighd, -gender, -race, -tcaree, -tgen, -freelu, -trace, -starts_with("gk"))
 ```
+
+
+## Identification of potential confounder
+
+Let the variables be defined as follows:
+
+- $Y$: Outcome variable — students’ **math scores**.
+- $X$: Treatment variables — **class type, grade level, and their interaction (class type × grade)**.
+- $Z$: Potential confounders — **school area type, free lunch status, student race, teacher race, and teacher degree, etc**.
+- $A$: Ancillary variables — **treads (reading), tlists (listening), wordsk (word skills), motivr (motivation), selfco (self-concept), and lagged math scores from previous grades**.
+
+Our objective is to estimate the effect of class size on students’ mathematics achievement in the STAR experiment. Although the initial assignment was randomized, factors such as classroom reassignment and student mobility may weaken the ideal experimental conditions. As a result, background characteristics may influence both classroom assignment and student outcomes.
+
+A variable $Z$ acts as a confounder if it is associated with both the treatment $X$ (class type) and the outcome $Y$ (math score). Thus we examine three relationships:
+
+- **$X \rightarrow Y$:** whether class type is associated with math achievement.  
+- **$Z \rightarrow Y$:** whether background characteristics are associated with math achievement.
+- **$Z \rightarrow X$ or $X \leftarrow Z \rightarrow Y$:** whether background characteristics are related to classroom assignment. 
+
+If these relationships hold, failing to control for $Z$ may bias estimates of the effect of class size on student outcomes. Therefore, these variables are included as controls in the subsequent analysis.
+
+
+### Verify **$X \rightarrow Y$:**
+
+```{r}
+# Plots and Graphs
+library(ggplot2)
+stars1 <- stars1 %>%
+  mutate(class_type = case_when(
+    class_type %in% c("Regular class", "Regular + aide") ~ "Regular",
+    TRUE ~ class_type
+  )) %>%
+  mutate(class_type = as.factor(class_type))
+ggplot(data=stars1, mapping=aes(y=math_score,x=grade,fill=class_type)) +
+   geom_boxplot(na.rm=TRUE) + 
+   xlab('Grade Level')+ ylab('Math Scores') + 
+   ggtitle('Math Scores by Level and Class Type')
+```
+
+The boxplots show the distribution of students’ mathematics scores by grade level (K–3) and class type (small class/regular class). We can see that math scores increase steadily across grades. Also, students in small classes consistently exhibit slightly higher math scores than those in regular classes within the same grade. Thirdly, the difference between small classes and regular classes appears to persist across all grade levels, suggesting a potential interaction between grade and class type. In particular, the gap between the two class types appears to be slightly larger in lower grades. Thus, we can say that $X \rightarrow Y$ exists.
+
+
+### Examine potential variables that **$Z \rightarrow Y$:**
 
 ```{r, width = 10, height = 10}
 library(patchwork)
@@ -228,22 +277,16 @@ make_all_plots <- function(df, cont, cats, ncol = 3) {
 make_all_plots(stars1, "math_score", cat_vars)
 ```
 
-```{r}
-# Plots and Graphs
-library(ggplot2)
-stars1 <- stars1 %>%
-  mutate(class_type = case_when(
-    class_type %in% c("Regular class", "Regular + aide") ~ "Regular",
-    TRUE ~ class_type
-  )) %>%
-  mutate(class_type = as.factor(class_type))
-ggplot(data=stars1, mapping=aes(y=math_score,x=grade,fill=class_type)) +
-   geom_boxplot(na.rm=TRUE) + 
-   xlab('Grade Level')+ ylab('Math Scores') + 
-   ggtitle('Math Scores by Level and Class Type')
-```
+The figure compares math score distributions across several student, teacher, and school characteristics. As we can see, some of the distribution of data has a strong violations of normality. So we use Kruskal--Wallis test to evaluate whether math scores differ across groups. Unlike the ANOVA, Kruskal--Wallis it is a nonparametric method based on ranks, which means that there are no normality assumption of data.
+
+The null hypothesis of Kruskal--Wallis is that the distributions of math scores are the same across all groups; equivalently, under a common-shape assumption, the group medians are equal. The alternative hypothesis is that at least one group differs from the others.
+
+Because multiple tests are conducted across several covariates, we adopt a significance threshold of $\alpha =0.001$ to reduce the risk of false positives arising from multiple comparisons and the large sample size of the STAR dataset. The figure compares math score distributions across several student, teacher, and school characteristics. 
+
+In this case, Kruksal--Wallis p--value of **area type, free lunch status, student race, teacher race, teacher gender, and teacher degree** are less or equal than 0.001. Thus, we reject the null hypothesis, showing that they are significant factors that influence students’ mathematics performance, indicating their relationship of $Z \rightarrow Y$. To determine whether they act as confounders, we further examine whether these variables are also associated with class type (or to say $Z \rightarrow X$ exists).
 
 
+### Examine confounders that satistfies **$Z \leftarrow X \rightarrow Y$:**
 
 ```{r}
 
@@ -254,7 +297,7 @@ stars_clean <- stars1[complete.cases(stars1[, all_vars]), ]
 
 model_1 <- lm(math_score ~ class_type * grade, data = stars_clean)
 model_2 <- lm(math_score ~ class_type * grade + free_lunch, data = stars_clean)
-model_3 <- lm(math_score ~ class_type * grade + free_lunch + student_race, data = stars_clean)
+model_3 <- lm(math_score ~ class_type * grade + free_lunch + area_type, data = stars_clean)
 model_4 <- lm(math_score ~ class_type * grade + free_lunch + student_race + area_type, data = stars_clean)
 model_5 <- lm(math_score ~ class_type * grade + free_lunch + student_race + area_type + teacher_degree, data = stars_clean)
 model_6 <- lm(math_score ~ class_type * grade + free_lunch + student_race + area_type + teacher_degree + teacher_gender, data = stars_clean)
@@ -322,8 +365,51 @@ p <- ggplot(coef_df, aes(x = estimate, y = model, color = term_group)) +
 p
 ```
 
-```{r}
+Equivalent to the linear regression model
 
+$$
+Y_i=\alpha+X_i^\top\beta+Z_i^\top\gamma+\varepsilon_i,
+$$
+
+where $Y_i$ is math score, $X_i$ contains the treatment-related design terms for class type, grade, and their interaction terms, and $Z_i$ contains candidate confounders added sequentially across nested models. The figure tracks how the estimated coefficients $\beta$ change as additional covariates $Z_i$ are added step by step into the regression model. Each panel corresponds to one coefficient, each point is the estimate from a given model, and each horizontal line is its 95% confidence interval. The percentages show how much the coefficient changes relative to the previous model. 
+
+The goal is to assess whether adding a covariate substantially changes the estimated effects of treatment variables. If a coefficient shifts noticeably after a variable is added, that variable may be acting as a confounder. As a heuristic, a covariate is flagged as a potential confounder if its inclusion changes a focal class-type coefficient by more than 10% in absolute value.
+
+In this plot, the largest changes occur after adding free lunch status, area type and student’s race, while later adding teacher's degree and gender does not changes the coefficient of treatment effects. This suggests that these three variables account for the main confounding in the relationship of $Z \rightarrow X$ or adding $Z$ changes how $X \rightarrow Y$. Thus, in our final model we need to conditioning on the effects of free lunch status, area type and student’s race in order to accurately estimate the effect of treatment variable.
+
+
+## Analysis of missing mechanism
+
+- **MCAR (Missing Completely at Random)**: the probability of missingness is unrelated to both observed and unobserved data. In this case, missing values occur purely by chance, dropping incomplete cases does not introduce bias.
+
+- **MAR (Missing at Random)**: the probability of missingness may depend on observed variables, but conditional on those observed variables, it does not depend on the missing value itself.
+
+- **MNAR (Missing Not at Random)**: the probability of missingness still depends on the unobserved value itself, even after conditioning on observed data. This cannot be verified directly from the observed data alone, because the mechanism depends on values that are not observed.
+
+In practice, these mechanisms cannot usually be distinguished with certainty from the observed data alone, especially in distinguishing MAR and MNAR. Therefore, rather than attempting to verify MAR directly, we assess its plausibility indirectly using the following diagnostic strategies:
+
+- **Assess whether missingness is explainable by observed data**: model the missingness indicator using baseline covariates, lagged outcomes, and other observed variables. If missingness can be substantially explained by observed information, the MAR assumption becomes more plausible.
+
+- **Include strong auxiliary variables**: add variables that are highly predictive of the missing outcome or of the missingness process into the imputation or likelihood-based model. This can reduce bias and strengthen the plausibility of MAR.
+
+- **Check robustness under MAR-based methods**: compare results across approaches such as complete-case analysis, IPW, FIML, and MI under the same observed-data structure. Similar conclusions make MAR-based inference more credible.
+
+- **Conduct MNAR sensitivity analysis**: evaluate how conclusions change under plausible departures from MAR using methods such as pattern-mixture models, selection models, or delta-adjusted imputation. Stable results suggest that the main findings are not overly sensitive to violations of MAR.
+
+
+### Proving data is not MCAR
+
+Each student’s outcome record is summarized by a four-digit indicator over grades K, 1, 2, 3, where 1 denotes an observed math score and 0 denotes a missing math score. For example, 1111 indicates complete observation across all four grades and 1001 indicates a non-monotone pattern with observation in K and Grade 3 but missingness in between.
+
+We classified the K–3 observation patterns into five descriptive groups:
+
+- Pattern 1111 was defined as **complete cases**. 
+- Patterns 1110, 1100, 1000, 0100, and 0110 were grouped as **monotone attrition**, since once students entered a missing state, they did not subsequently return to full follow-up. 
+- Patterns 0011 and 0001 were classified as **late entry**, as observations only began in later grades.
+- Patterns 1010, 1001, 0101, 0010, and 1011 were classified as **intermittent**, reflecting non-monotone missingness with reappearance after one or more missing waves, this is the most possible group whose missing at random. 
+- Pattern 0111 was separated as **no records in K**, because it there are a specific group of students who hasn't got kindergarten but observed continuously from Grade 1 onward.
+
+```{r}
 wide <- stars1 %>% mutate(obs = !is.na(math_score)) %>%
   select(student_id, grade, obs) %>%
   pivot_wider(names_from = grade, values_from = obs)
@@ -338,8 +424,54 @@ wide <- wide %>% mutate(pattern = paste0(K*1, `1`*1, `2`*1, `3`*1))
 wide <- wide %>% filter(pattern != "0000") %>%
   mutate(complete = ifelse(pattern == "1111", "Complete", "Incomplete"))
 
+stars_plot <- stars1 %>% left_join(wide %>% select(student_id, pattern), by = "student_id") %>%
+  filter(!is.na(pattern), pattern != "0000", !is.na(math_score))
+
+pattern_order <- stars_plot %>% distinct(student_id, pattern) %>% count(pattern, sort = TRUE) %>% pull(pattern)
+pattern_order <- c("1111", setdiff(pattern_order, "1111"))
+
+stars_plot2 <- stars1 %>%
+  left_join(wide %>% select(student_id, pattern), by = "student_id") %>%
+  filter(!is.na(pattern), pattern != "0000", !is.na(math_score)) %>%
+  mutate(pattern_class = case_when(pattern == "1111" ~ "Complete cases",
+      pattern %in% c("1110", "1100", "1000", "0100", "0110") ~ "Monotone attrition",
+      pattern %in% c("0011", "0001") ~ "Late entry",
+      pattern %in% c("1010", "1001", "0101", "0010", "1011") ~ "Intermittent",
+      pattern %in% "0111" ~ "No records in K",
+      TRUE ~ NA_character_)) %>%
+  filter(!is.na(pattern_class))
+
+class_count <- stars_plot2 %>% distinct(student_id, pattern_class) %>% count(pattern_class)
+
+class_labels <- class_count %>% mutate(label = paste0(pattern_class, "\n(n=", n, ")")) %>%
+  {setNames(.$label, .$pattern_class)}
+
+stars_plot2 <- stars_plot2 %>%
+  mutate(pattern_class = factor(pattern_class, 
+                                levels = c("Complete cases","Monotone attrition", 
+                                           "Late entry", "Intermittent", "No records in K")))
+
+p3 <- ggplot(stars_plot2, aes(x = pattern_class, y = math_score, fill = pattern_class)) +
+  geom_boxplot(outlier.alpha = 0.3) +
+  scale_x_discrete(labels = class_labels) +
+  labs(title = "Math score distribution by missingness type",
+    subtitle = "Scores pooled across grades K–3",
+    x = "Missingness type",
+    y = "Math score") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    legend.position = "none")
+p3 
+``` 
+
+The boxplot shows clear differences in pooled math-score distributions across missingness types from kindergarten to Grade 3. The pooled math-score distributions suggest that complete cases, intermittent cases, have broadly similar achievement levels. However, the monotone attrition group has lower math score while the late-entry group shows the significantly higher math score among all categories. The pattern suggests that missingness type is related to student performance, which is inconsistent with a purely MCAR mechanism. Thus, missingness type itself is informative and should be analyzed specifically.
+
+## Examine whether missingness can be explained by observed variables
+
+```{r}
 baseline_vars <- c("math_score", "free_lunch", "student_race",
-  "student_gender", "class_type", "area_type")
+  "student_gender", "class_type", "area_type","class_size")
 
 stu_base <- stars1 %>% arrange(student_id, grade) %>%
   group_by(student_id) %>% slice(1) %>%
@@ -349,68 +481,40 @@ stu_base <- stars1 %>% arrange(student_id, grade) %>%
 
 tab <- CreateTableOne(vars = baseline_vars, strata = "complete",
   data = stu_base, test = TRUE)
-print(tab, showAllLevels = TRUE, smd = TRUE)
+tab_mat <- print(tab, smd = TRUE, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+tab_df  <- as.data.frame(tab_mat)
+tab_df$Variable <- c("n", "Math score, mean (SD)", "Free lunch: Non-free lunch, n (%)",
+  "Student race: Non-Black, n (%)", "Student gender: Female, n (%)",
+  "Class type: Small class, n (%)",  "Area type, n (%)", "  Inner City", "  Rural",
+  "  Suburban", "  Urban", "Class size, mean (SD)")
+tab_df <- tab_df[, !names(tab_df) %in% "test"]
+tab_df <- tab_df[, c("Variable", setdiff(names(tab_df), "Variable"))]
+rownames(tab_df) <- NULL
+knitr::kable(tab_df, caption = "Baseline characteristics by completeness status")
 ```
 
+The clear baseline differences between complete and incomplete cases suggest that missingness is associated with observed covariates, indicating that the process is at least partly explainable by observed data. This makes the MAR assumption more plausible than MCAR. And relative to complete cases, incomplete observations are more likely to come from students receiving free lunch, from Black students, and from inner-city schools. In contrast, class type is relatively balanced between the two groups, and motivation shows almost no difference.
+
+### Include strong auxiliary variables
 
 ```{r}
-stars_plot <- stars1 %>%
-  left_join(wide %>% select(student_id, pattern), by = "student_id") %>%
-  filter(!is.na(pattern), pattern != "0000", !is.na(math_score))
+stars1 <- stars1 %>%
+  arrange(student_id, grade) %>%
+  group_by(student_id) %>%
+  mutate(math_lag1 = lag(math_score, 1),
+    math_lag2 = lag(math_score, 2),
+    math_lag3 = lag(math_score, 3)) %>% ungroup()
+cont_vars <- c("treads", "tlists", "wordsk", "motivr", "readbs", "mathbs", "math_lag1", "math_lag2", "math_lag3")
 
-pattern_order <- stars_plot %>%
-  distinct(student_id, pattern) %>%
-  count(pattern, sort = TRUE) %>%
-  pull(pattern)
+cor_df <- map_dfr(cont_vars, function(v) {
+  tmp <- stars1 %>% select(math_score, all_of(v)) %>%
+    filter(!is.na(math_score), !is.na(.data[[v]]))
+  
+  tibble(variable = v, n = nrow(tmp),
+    correlation = cor(tmp$math_score, tmp[[v]], use = "complete.obs", method = "pearson"))
+}) %>% arrange(desc(abs(correlation)))
 
-pattern_order <- c("1111", setdiff(pattern_order, "1111"))
-
-stars_plot <- stars_plot %>%
-  mutate(pattern = factor(pattern, levels = pattern_order))
-
-p1 <- ggplot(stars_plot, aes(x = pattern, y = math_score, fill = pattern)) +
-  geom_boxplot(outlier.alpha = 0.3) +
-  coord_flip() +
-  labs(title = "Math score distribution by missingness pattern",
-    subtitle = "Scores pooled across grades K–3", x = "Missingness pattern", y = "Math score") +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-    plot.title = element_text(hjust = 0.5),
-    plot.subtitle = element_text(hjust = 0.5),
-    legend.position = "none")
-    
-race_plot <- stars1 %>%
-  left_join(wide %>% select(student_id, pattern), by = "student_id") %>%
-  filter(!is.na(pattern), pattern != "0000") %>%
-  distinct(student_id, pattern, student_race)
-race_plot <- race_plot %>%
-  mutate(pattern = factor(pattern, levels = pattern_order))
-p2 <- ggplot(race_plot, aes(x = pattern, fill = student_race)) +
-  geom_bar(position = "fill") +
-  labs(title = "Student race composition by missingness pattern", x = "Missingness pattern",
-    y = "Proportion", fill = "Student race") +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-    plot.title = element_text(hjust = 0.5))+ coord_flip()
-class_plot <- stars1 %>%
-  left_join(wide %>% select(student_id, pattern), by = "student_id") %>%
-  filter(!is.na(pattern), pattern != "0000", !is.na(class_type)) %>%
-  distinct(student_id, pattern, class_type)
-
-class_plot <- class_plot %>%
-  mutate(pattern = factor(pattern, levels = pattern_order))
-
-p3 <- ggplot(class_plot, aes(x = pattern, fill = class_type)) +
-  geom_bar(position = "fill") +
-  labs(title = "Class type composition by missingness pattern",
-    x = "Missingness pattern", y = "Proportion", fill = "Class type") +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-    plot.title = element_text(hjust = 0.5))+ coord_flip()
-pattern_count <- stars_plot %>%
-  distinct(student_id, pattern) %>%
-  count(pattern, sort = TRUE)
-p1
-# p2 | p3
-# pattern_count
+cor_df
 ```
+
+We examined the auxiliary variables including reading score (treads), word skills (wordsk), listening score (tlists), and lagged math scores. They have shown strong correlations with math achievement, which is informative for predicting missing math outcomes and can be included in the imputation model to reduce bias. This could be considered a case of satisfying the MAR assumption.
