@@ -1,0 +1,261 @@
+---
+title: "Final Project for STAR Project"
+author: "Ruitian Liu, Zhiye Jiang, Tommy Yu, Yuyu Zhang"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 3
+    number_sections: true
+    theme: flatly
+    highlight: tango
+    df_print: paged
+    code_folding: hide
+    fig_width: 8
+    fig_height: 5
+    fig_caption: true
+fontsize: 11pt
+bibliography: references.bib
+geometry: margin=1in
+---
+
+
+```{css, echo=FALSE}
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Source+Code+Pro:wght@400;600&family=Inter:wght@300;400;500;600&display=swap');
+
+body {
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  line-height: 1.85;
+  color: #2d2d2d;
+  background-color: #fafaf8;
+}
+
+
+h1, h2, h3, h4 {
+  font-family: 'Lora', Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #1a1a1a;
+}
+
+h1.title {
+  font-size: 2.4em;
+  border-bottom: 3px solid #2563eb;
+  padding-bottom: 0.3em;
+  margin-bottom: 0.2em;
+}
+
+h1 { font-size: 1.9em; border-left: 4px solid #2563eb; padding-left: 0.6em; }
+h2 { font-size: 1.45em; color: #374151; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.2em; }
+h3 { font-size: 1.15em; color: #4b5563; }
+
+.author, .date {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.95em;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+
+p { margin-bottom: 1.1em; max-width: 760px; text-align: justify;}
+
+
+pre, code {
+  font-family: 'Source Code Pro', 'Courier New', monospace;
+  font-size: 0.88em;
+}
+
+pre {
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #2563eb;
+  border-radius: 6px;
+  padding: 1em 1.2em;
+}
+
+
+code:not(pre code) {
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.5em 0;
+  font-size: 0.92em;
+}
+
+thead tr { background-color: #1e3a5f; color: #ffffff; }
+th { padding: 10px 14px; text-align: left; font-weight: 600; }
+td { padding: 9px 14px; border-bottom: 1px solid #e5e7eb; }
+tbody tr:nth-child(even) { background-color: #f8fafc; }
+tbody tr:hover { background-color: #eff6ff; transition: background 0.15s; }
+
+
+blockquote {
+  border-left: 4px solid #93c5fd;
+  background: #eff6ff;
+  margin: 1.5em 0;
+  padding: 0.8em 1.2em;
+  border-radius: 0 6px 6px 0;
+  color: #1e40af;
+  font-style: italic;
+}
+
+
+#TOC {
+  font-size: 0.88em;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1em;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+#TOC ul { padding-left: 1.2em; }
+#TOC li { line-height: 1.7; }
+#TOC a { color: #374151; text-decoration: none; }
+#TOC a:hover { color: #2563eb; }
+
+img { border-radius: 6px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+
+hr { border: none; border-top: 2px solid #e5e7eb; margin: 2em 0; }
+
+.main-container { max-width: 960px; padding-left: 60px; padding-right: 60px;}
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 7,
+  fig.height = 4.5,
+  fig.align = "center"
+)
+
+library(tidyverse)
+library(tableone)
+library(mice)
+library(lme4)
+library(gt)
+library(patchwork)
+```
+
+# Abstract
+
+# Background and study design
+
+Project STAR (Student/Teacher Achievement Ratio) was one of the most important large-scale randomized education experiments in the United States. It was launched by the Tennessee State Department of Education in the 1985–86 school year to study whether smaller classes in the early elementary grades improve student outcomes. The project began in 79 schools across 42 districts in Tennessee and eventually followed students over many years. The large sample and long follow-up period had made STAR an important study in education fields.
+
+In the STAR experiment, students entering kindergarten were randomly assigned within schools to one of three classroom types: small classes (about 13–17 students), regular classes (about 22–25 students), and regular classes with a full-time teacher’s aide. Teachers were also randomly assigned to these class types. The original design intended for students to stay in their assigned treatment group after entering the study. 
+
+Class size has long been a question for educators. **Smaller classes** may help young children by giving them more individual attention and improving classroom participation. The potential benefits of class size may be especially important in the **early grades**. However, reducing class size is expensive, since it requires more teachers, more classrooms and funding. This is a big challenge for underserved schools or districts, becoming an important equity concern in education. For this reason, a question arises: **whether the gains of small classes are worthy to justify the substantial costs of implementation**. [@schanzenbach2007star]
+
+Students were intended to stay in the same class-type assignment throughout the whole process. So the study was began with randomization, and all assignments was conducted within schools, the design helped balance school-level differences across treatment groups. This can be a good background for interpreting casual effects.
+
+Although STAR began with randomization, later studies have claimed that it is **not a completely randomized experiments**. Because the experiments are affected by factors such as student transfers, classroom reassignment, imperfect compliance, teacher changes, and missing follow-up data. Therefore, studies must address these post-randomization outcomes carefully.
+
+## Violations of Randomizations - Selection Bias
+
+When missing of the data is not at random, it can generate selection bias. One persistent concern of STAR Project is that there was substantial sample loss in the later years of the study, and this attrition may not have been entirely random. More broadly, @hanushek1999star identified attrition, crossovers, and selective test taking as threats to the integrity of STAR’s original randomization, and @filges2018classsize note that these remain central concerns in later assessments of the experiment.
+
+- **Attrition is related to academic performance or student disadvantage.**
+
+@ding2006dynamic shown that attrition in Project STAR was not random with respect to student performance. **Students who later attrited had significantly lower kindergarten achievement**, and that among students on free lunch, those who left the sample scored significantly **lower in mathematics** than comparable students who remained. In terms of this, if lower-performing students are more likely to leave the sample, the observed students may no longer represent randomization.
+
+- **Attrition is also related to treatment status.**
+
+@krueger1999star shown that attrition from STAR was substantial. In a subsample with initial enrollment logs, 10.4% of students assigned to small classes were missing by the start of kindergarten, compared with 14.3% of those assigned to regular classes, suggesting that some students may have been withdrawn because they were not assigned to a small class. In addition, @ding2006dynamic show that the pattern of **attrition differed between class types within and across schools**. These findings supported that the observed small-class and regular-class groups in later grades are no longer simply the originally randomized groups, but the outcome of initial random assignment followed by differential attrition and movement across class types.
+
+## Other main empirical complications
+
+- **Student mobility / transfers.**
+
+@chetty2011classroom claimed that some students did not remain in their originally assigned classrooms or schools over time, and new entrants were also added in later grades. As a result, treatment exposure in later grades may differ from the initial assignment.
+
+- **Noncompliance with original assignment.**
+
+@krueger1999star shown that some students moved between class types after the initial random assignment. Therefore, observed class type in later grades would not always be consistent with original treatment assignment.
+
+- **Teacher changes and classroom reshuffling.**
+
+@chetty2011classroom shown that if students were exposed to different classroom environments over time, including new teachers in subsequent grades and changes in class composition. These post-randomization changes may affect achievement independently of the original class-size assignment.
+
+- **Peer Effect.**
+
+@cascio2007first argued that scores may depend also on the characteristics of classmates. Since classroom composition can affect learning outcomes, peer effects may operate alongside the direct effect of small classes and make interpretation of the treatment difficult.
+
+# Research Questions
+
+## Estimand
+
+# Data and Sample Construction
+
+## Data source and variables
+
+## Reshaping and longitudinal structure
+
+## Sample inclusion and exclusion rules
+
+# Missingness and Attrition Patterns
+
+## Missing-data taxonomy
+
+## Descriptive summaries of missingness
+
+## Attrition diagnostics
+
+# Descriptive Analysis
+
+## Distribution of math scores over grades
+
+## Mean trajectories by class type
+
+## Covariate patterns related to missingness
+
+# Inferential Strategy
+
+## Main modeling idea
+
+## Complete-case benchmark
+
+## Multiple imputation by chained equations (MICE)
+
+## Assumptions
+
+# Results
+
+## Main estimates
+
+## Interpretation
+
+## Secondary findings on attrition
+
+# Sensitivity Analysis
+
+## Comparison to Inverse probability weighting (IPW)
+
+## Alternative sample definitions
+
+## Alternative imputation specifications
+
+## Pseudo-missing cross-validation for imputation quality
+
+## Discussion of MNAR risk
+
+# Discussion
+
+# Conclusion
+
+# References

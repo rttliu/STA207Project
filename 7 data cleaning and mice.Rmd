@@ -1,0 +1,702 @@
+
+
+---
+title: "Section 7"
+author: "Zhiye Jiang"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Section 7
+
+### PHASE 1: STAR Section 7 data preparation
+#### Purpose:
+- Load STAR student file
+- Standardize missing values
+- Keep only K-3 variables relevant to attrition/imputation
+- Build a variable-role table
+- Create a clean Phase 1 working file
+
+```{r setup}
+# ----------------------------
+# 0. Packages
+# ----------------------------
+required_pkgs <- c("readr", "dplyr", "stringr", "purrr", "tibble", "tidyr")
+to_install <- setdiff(required_pkgs, rownames(installed.packages()))
+if (length(to_install) > 0) install.packages(to_install)
+
+library(readr)
+library(dplyr)
+library(stringr)
+library(purrr)
+library(tibble)
+library(tidyr)
+```
+
+```{r star data}
+# ----------------------------
+# 1. File path
+# ----------------------------
+# Replace with your actual local path if needed
+file_path <- "STAR.tab"
+
+# ----------------------------
+# 2. Load raw data
+# ----------------------------
+# Assumes tab-delimited text. If the file is not tab-delimited, inspect first.
+star_raw <- read_tsv(
+  file = file_path,
+  na = c("", "NA", ".", "999", "9999", "99999", "999999"),
+  show_col_types = FALSE,
+  progress = FALSE
+)
+
+cat("Rows:", nrow(star_raw), "\n")
+cat("Cols:", ncol(star_raw), "\n")
+```
+
+```{r }
+# ----------------------------
+# 3. Normalize variable names
+# ----------------------------
+# Keep original names for reference; create uppercase safe names
+original_names <- names(star_raw)
+
+names(star_raw) <- names(star_raw) |>
+  str_trim() |>
+  str_replace_all("\\s+", "_") |>
+  str_to_upper()
+```
+
+```{r}
+# ----------------------------
+# 5. Helper: safely select variables that exist
+# ----------------------------
+keep_if_exists <- function(data, vars) {
+  existing <- intersect(vars, names(data))
+  missing  <- setdiff(vars, names(data))
+  if (length(missing) > 0) {
+    message("Variables not found and skipped: ", paste(missing, collapse = ", "))
+  }
+  data[, existing, drop = FALSE]
+}
+```
+
+```{r}
+# ----------------------------
+# 6. STAR core variables from the user guide
+# ----------------------------
+# IDs and baseline demographics documented in the guide
+id_vars <- c(
+  "STDNTID",
+  "SCHID", "SCHOOLID", "SCHOOL_ID",
+  "GKTEACH", "G1TEACH", "G2TEACH", "G3TEACH",
+  "GKCLASS", "G1CLASS", "G2CLASS", "G3CLASS"
+)
+
+demo_vars <- c(
+  "GENDER",
+  "RACE",
+  "BIRTHMON",
+  "BIRTHDAY",
+  "BIRTHYEA"
+)
+
+# In-STAR flags documented in guide
+instar_flag_vars <- c("FLAGSGK", "FLAGSG1", "FLAGSG2", "FLAGSG3")
+
+# Achievement-data flags: naming may vary in actual file, so we detect below too
+ach_flag_candidates <- c(
+  "FLAGAK", "FLAGA1", "FLAGA2", "FLAGA3",
+  "FLAGACHK", "FLAGACH1", "FLAGACH2", "FLAGACH3",
+  "ACHFLGK", "ACHFLG1", "ACHFLG2", "ACHFLG3"
+)
+
+# Grade-specific treatment and class size from guide
+class_type_vars <- c("GKCLASST", "G1CLASST", "G2CLASST", "G3CLASST")
+class_size_vars <- c("GKCLASSS", "G1CLASSS", "G2CLASSS", "G3CLASSS")
+
+# Attendance / special ed / promotion / lunch proxies that often matter for missingness
+other_k3_vars <- c(
+  "GKPRESEN", "GKABSENT", "GKSPECED", "GKPROMOT", "GKFREELU",
+  "G1PRESEN", "G1ABSENT", "G1SPECED", "G1PROMOT", "G1FREELU",
+  "G2PRESEN", "G2ABSENT", "G2SPECED", "G2PROMOT", "G2FREELU",
+  "G3PRESEN", "G3ABSENT", "G3SPECED", "G3PROMOT", "G3FREELU"
+)
+
+# ----------------------------
+# 7. Discover achievement variables
+# ----------------------------
+# The guide says K–3 include norm-referenced and criterion-referenced achievement scores.
+# We search for math-related variables by pattern instead of hard-coding uncertain names.
+all_names <- names(star_raw)
+
+math_patterns <- c(
+  "^GK.*MATH", "^G1.*MATH", "^G2.*MATH", "^G3.*MATH",
+  "^GK.*T?MATH", "^G1.*T?MATH", "^G2.*T?MATH", "^G3.*T?MATH",
+  "^GK.*SCORE.*MATH", "^G1.*SCORE.*MATH", "^G2.*SCORE.*MATH", "^G3.*SCORE.*MATH"
+)
+
+math_vars <- all_names[
+  map_lgl(
+    all_names,
+    ~ any(str_detect(.x, math_patterns))
+  )
+]
+
+# Also keep reading scores if useful later as predictors
+read_patterns <- c("^GK.*READ", "^G1.*READ", "^G2.*READ", "^G3.*READ")
+read_vars <- all_names[
+  map_lgl(
+    all_names,
+    ~ any(str_detect(.x, read_patterns))
+  )
+]
+
+cat("\nDetected math-related variables:\n")
+print(math_vars)
+
+cat("\nDetected reading-related variables:\n")
+print(read_vars)
+```
+
+```{r}
+# ----------------------------
+# 8. Define math outcome variables explicitly
+# ----------------------------
+
+math_vars <- c(
+  "GKTMATHSS",
+  "G1TMATHSS",
+  "G2TMATHSS",
+  "G3TMATHSS"
+)
+
+# keep only those actually present
+math_vars <- intersect(math_vars, names(star_raw))
+
+cat("\nMath outcome variables used:\n")
+print(math_vars)
+```
+
+```{r}
+# ----------------------------
+# 8.5 Build the Phase 1 working dataset
+# ----------------------------
+
+# Detect achievement flags if exact names vary
+detected_ach_flags <- names(star_raw)[
+  str_detect(names(star_raw), "^FLAGA(K|1|2|3)$|^FLAGACH(K|1|2|3)$|^ACHFLG(K|1|2|3)$")
+]
+
+ach_flag_vars <- unique(c(
+  intersect(ach_flag_candidates, names(star_raw)),
+  detected_ach_flags
+))
+
+cat("\nDetected achievement flags:\n")
+print(ach_flag_vars)
+
+# Keep only variables relevant for Phase 1
+phase1_vars <- unique(c(
+  id_vars,
+  demo_vars,
+  instar_flag_vars,
+  ach_flag_vars,
+  class_type_vars,
+  class_size_vars,
+  other_k3_vars,
+  math_vars,
+  read_vars
+))
+
+# Select only variables that actually exist
+existing_phase1_vars <- intersect(phase1_vars, names(star_raw))
+
+star_phase1 <- star_raw %>%
+  select(all_of(existing_phase1_vars))
+
+cat("\nPhase 1 dataset created.\n")
+cat("Rows:", nrow(star_phase1), "\n")
+cat("Cols:", ncol(star_phase1), "\n")
+```
+
+```{r}
+# ----------------------------
+# 9. Create standardized math outcome variables
+# ----------------------------
+
+star_phase1 <- star_phase1 %>%
+  mutate(
+    math_K = if ("GKTMATHSS" %in% names(.)) GKTMATHSS else NA,
+    math_1 = if ("G1TMATHSS" %in% names(.)) G1TMATHSS else NA,
+    math_2 = if ("G2TMATHSS" %in% names(.)) G2TMATHSS else NA,
+    math_3 = if ("G3TMATHSS" %in% names(.)) G3TMATHSS else NA
+  )
+
+cat("\nStandardized math variables created:\n")
+print(c("math_K", "math_1", "math_2", "math_3"))
+```
+
+```{r}
+# ----------------------------
+# 10. Create math availability indicators
+# ----------------------------
+
+star_phase1 <- star_phase1 %>%
+  mutate(
+    has_math_K = !is.na(math_K),
+    has_math_1 = !is.na(math_1),
+    has_math_2 = !is.na(math_2),
+    has_math_3 = !is.na(math_3)
+  )
+
+cat("\nMath availability indicators created.\n")
+```
+
+```{r}
+summary(star_phase1 %>% select(math_K, math_1, math_2, math_3))
+
+star_phase1 %>%
+  summarise(
+    n_K = sum(has_math_K),
+    n_1 = sum(has_math_1),
+    n_2 = sum(has_math_2),
+    n_3 = sum(has_math_3)
+  )
+```
+## Phase 2
+
+-	missingness indicators
+-	pattern classification
+-attrition summary
+
+
+We now convert these into a missingness pattern string such as:
+
+-1111  complete data
+-1110  dropout after Grade 2
+-1011  intermittent missingness
+-0111  late entry
+
+```{r}
+# ----------------------------
+# 11. Create missingness pattern string
+# ----------------------------
+
+star_phase1 <- star_phase1 %>%
+  mutate(
+    pattern_math = paste0(
+      as.integer(has_math_K),
+      as.integer(has_math_1),
+      as.integer(has_math_2),
+      as.integer(has_math_3)
+    )
+  )
+
+head(star_phase1$pattern_math)
+```
+
+```{r}
+# ----------------------------
+# 12. Pattern frequency table
+# ----------------------------
+
+pattern_table <- star_phase1 %>%
+  count(pattern_math, sort = TRUE)
+
+pattern_table
+```
+```{r}
+# ----------------------------
+# 13. Classify missingness patterns
+# ----------------------------
+
+star_phase1 <- star_phase1 %>%
+  mutate(
+    missing_type = case_when(
+
+      pattern_math == "1111" ~ "complete",
+
+      pattern_math %in% c("1110","1100","1000") ~ "monotone_dropout",
+
+      pattern_math %in% c("1011","1010","1001","0101","0110") ~ "intermittent_missing",
+
+      pattern_math %in% c("0111","0011","0001") ~ "late_entry",
+
+      TRUE ~ "other"
+    )
+  )
+```
+
+```{r}
+# ----------------------------
+# 14. Summary of missingness types
+# ----------------------------
+
+missing_summary <- star_phase1 %>%
+  count(missing_type) %>%
+  mutate(percent = n / sum(n) * 100)
+
+missing_summary
+```
+
+```{r}
+# Bar plot
+library(ggplot2)
+
+ggplot(star_phase1, aes(x = missing_type)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    title = "STAR K–3 Math Missingness Patterns",
+    x = "Missingness type",
+    y = "Number of students"
+  ) +
+  theme_minimal()
+```
+
+**Interpretation**:
+
+Missingness in the STAR K–3 math outcomes exhibits several distinct patterns. While a portion of students have complete observations across all four grades, a substantial fraction exhibit monotone dropout after an earlier grade, consistent with student mobility across schools. We also observe intermittent missingness and occasional late entry patterns. This heterogeneity indicates that the missing data process cannot be treated as purely monotone attrition, motivating the use of flexible imputation methods that accommodate complex missingness structures.
+
+```{r trick}
+# ----------------------------
+# Elegant attrition trick, part 1:
+# transition tables between grades
+# ----------------------------
+
+transition_K_1 <- table(
+  K = star_phase1$has_math_K,
+  G1 = star_phase1$has_math_1,
+  useNA = "ifany"
+)
+
+transition_1_2 <- table(
+  G1 = star_phase1$has_math_1,
+  G2 = star_phase1$has_math_2,
+  useNA = "ifany"
+)
+
+transition_2_3 <- table(
+  G2 = star_phase1$has_math_2,
+  G3 = star_phase1$has_math_3,
+  useNA = "ifany"
+)
+
+transition_K_1
+transition_1_2
+transition_2_3
+```
+```{r trick 2}
+# install.packages(c("ggplot2", "ggalluvial", "dplyr", "tidyr"))  # if needed
+library(ggplot2)
+library(ggalluvial)
+library(dplyr)
+library(tidyr)
+
+# Create clean labels for plotting
+plot_dat <- star_phase1 %>%
+  transmute(
+    K  = if_else(has_math_K,  "Obs", "Miss"),
+    G1 = if_else(has_math_1,  "Obs", "Miss"),
+    G2 = if_else(has_math_2,  "Obs", "Miss"),
+    G3 = if_else(has_math_3,  "Obs", "Miss")
+  ) %>%
+  count(K, G1, G2, G3, name = "Freq")
+
+ggplot(
+  plot_dat,
+  aes(axis1 = K, axis2 = G1, axis3 = G2, axis4 = G3, y = Freq)
+) +
+  geom_alluvium(aes(fill = K), width = 0.2, alpha = 0.8) +
+  geom_stratum(width = 0.2, fill = "grey85", color = "grey40") +
+  geom_text(stat = "stratum", aes(label = after_stat(stratum)), size = 4) +
+  scale_x_discrete(limits = c("K", "G1", "G2", "G3"), expand = c(.05, .05)) +
+  labs(
+    title = "STAR K–3 Math Observation Trajectories",
+    x = "Grade",
+    y = "Number of students"
+  ) +
+  theme_minimal()
+```
+Most students remain observed across adjacent grades, but there are visible flows from observed to missing and also from missing back to observed, confirming that the missing-data structure includes both monotone attrition and intermittent missingness.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+star_phase1 %>%
+  count(pattern_math, sort = TRUE) %>%
+  mutate(pattern_math = reorder(pattern_math, n)) %>%
+  ggplot(aes(x = pattern_math, y = n)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Frequency of K–3 Math Missingness Patterns",
+    x = "Pattern (1 = observed, 0 = missing)",
+    y = "Number of students"
+  ) +
+  theme_minimal()
+```
+This figure shows that STAR missingness is not a simple one-directional dropout process; some students disappear and later reappear, which is why we classify patterns before choosing the primary imputation strategy.
+
+# Phase 3
+Phase 3 is where we translate the descriptive insights from Phase 2 into clear operational rules that determine:
+	1.	which students remain in the primary analysis sample,
+	2.	which variables will be imputed,
+	3.	which variables will act only as predictors, and
+	4.	how the MICE procedure will be structured.
+	
+Since we **claim** : Students with only one observed math score contribute almost no longitudinal information and can destabilize chained-equation imputation.
+
+Therefore we create a variable counting how many math scores are observed
+
+```{r}
+# ----------------------------
+# 16. Count observed math scores
+# ----------------------------
+
+star_phase1 <- star_phase1 %>%
+  mutate(
+    n_math_obs =
+      has_math_K +
+      has_math_1 +
+      has_math_2 +
+      has_math_3
+  )
+
+table(star_phase1$n_math_obs)
+```
+
+We keep students with at least two observations:
+
+```{r}
+# ----------------------------
+# 17. Define primary analysis sample
+# ----------------------------
+
+star_analysis <- star_phase1 %>%
+  filter(n_math_obs >= 2)
+
+cat("Original sample:", nrow(star_phase1), "\n")
+cat("Analysis sample:", nrow(star_analysis), "\n")
+```
+
+```{r covariate makes MAR more plausible}
+# ----------------------------
+# 18. Define predictor variables for imputation
+# ----------------------------
+
+predictor_vars <- c(
+  demo_vars,
+  class_type_vars,
+  class_size_vars,
+  other_k3_vars,
+  read_vars
+)
+
+predictor_vars <- intersect(predictor_vars, names(star_analysis))
+
+cat("Predictors used in imputation:\n")
+print(predictor_vars)
+```
+
+```{r}
+# ----------------------------
+# 19. Build imputation dataset
+# ----------------------------
+
+impute_vars <- c(
+  "math_K",
+  "math_1",
+  "math_2",
+  "math_3",
+  predictor_vars
+)
+
+impute_vars <- intersect(impute_vars, names(star_analysis))
+
+star_impute <- star_analysis %>%
+  select(all_of(impute_vars))
+
+dim(star_impute)
+```
+
+```{r}
+colMeans(is.na(star_impute))
+```
+
+**takeway** for phase 3:
+After mapping missingness patterns, we restrict the primary analysis sample to students with at least two observed math scores. This restriction ensures that each student contributes some longitudinal information, which stabilizes the imputation process. The imputation model includes baseline demographics, class assignment variables, classroom characteristics, and additional predictors such as attendance and reading scores. Including these predictors helps approximate the missing-at-random assumption by conditioning on variables associated with both achievement and attrition.
+
+## Phase 4
+The objective is to impute the missing math scores:
+math_K
+math_1
+math_2
+math_3
+using a longitudinally informed predictor set.
+
+In longitudinal achievement data like STAR, the single strongest predictor of a student’s score at time t is the score at time t-1.conometric and education research on STAR routinely exploits this persistence.
+
+```{r}
+# ----------------------------
+# 20. Create lagged math predictors
+# ----------------------------
+
+star_impute <- star_impute %>%
+  mutate(
+    lag_math_1 = math_K,
+    lag_math_2 = math_1,
+    lag_math_3 = math_2
+  )
+
+library(VIM)
+
+aggr(star_impute,
+     col = c("blue","red"),
+     numbers = TRUE,
+     sortVars = TRUE,
+     cex.axis = .7)
+```
+
+
+
+```{r MICE00}
+# install.packages("mice")  # run once if needed
+library(mice)
+
+md.pattern(star_impute)
+```
+
+
+Inspection of the missingness patterns reveals substantial heterogeneity in the observation structure. While some students exhibit monotone attrition across grades, a nontrivial number of cases display intermittent missingness or late entry patterns. The missing data heatmap further shows that missing values are scattered across variables rather than forming a simple monotone structure. Consequently, the missing data process cannot be treated as purely monotone dropout, motivating the use of multiple imputation via chained equations.
+
+```{r MICE0}
+init <- mice(star_impute, maxit = 0)
+```
+
+```{r MICE}
+meth <- init$method
+
+# First turn everything off
+meth[] <- ""
+
+# Then turn on imputation only for the four math outcomes
+meth["math_K"] <- "pmm"
+meth["math_1"] <- "pmm"
+meth["math_2"] <- "pmm"
+meth["math_3"] <- "pmm"
+
+#meth
+
+pred <- init$predictorMatrix
+
+#pred
+
+pred <- init$predictorMatrix
+
+# Reset math rows
+pred["math_K", ] <- 0
+pred["math_1", ] <- 0
+pred["math_2", ] <- 0
+pred["math_3", ] <- 0
+
+pred["math_K", predictor_vars] <- 1
+pred["math_1", c("math_K", predictor_vars)] <- 1
+pred["math_2", c("math_1", predictor_vars)] <- 1
+pred["math_3", c("math_2", predictor_vars)] <- 1
+
+pred
+```
+
+```{r MICE2}
+imp <- mice(
+  star_impute,
+  method = meth,
+  predictorMatrix = pred,
+  m = 20,
+  maxit = 20,
+  seed = 207
+)
+
+```
+Missing math achievement scores were imputed using multiple imputation via chained equations. The imputation model incorporated demographic characteristics, classroom variables, attendance indicators, and reading scores to support the missing-at-random assumption. To preserve the longitudinal structure of achievement, each grade’s math score was predicted using the immediately preceding score along with the covariates. Continuous outcomes were imputed using predictive mean matching, and twenty imputed datasets were generated.
+```{r mice plot}
+completed_long <- complete(imp, "long")
+
+trajectory <- completed_long %>%
+  summarise(
+    mean_K = mean(math_K, na.rm = TRUE),
+    mean_1 = mean(math_1, na.rm = TRUE),
+    mean_2 = mean(math_2, na.rm = TRUE),
+    mean_3 = mean(math_3, na.rm = TRUE)
+  )
+
+trajectory
+
+trajectory_long <- trajectory %>%
+  pivot_longer(
+    everything(),
+    names_to = "grade",
+    values_to = "mean_score"
+  ) %>%
+  mutate(
+    grade = recode(grade,
+                   mean_K = "K",
+                   mean_1 = "1",
+                   mean_2 = "2",
+                   mean_3 = "3"),
+    grade = factor(grade, levels = c("K","1","2","3"))
+  )
+
+ggplot(trajectory_long,
+       aes(x = grade, y = mean_score, group = 1)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  labs(
+    title = "Average Math Achievement Trajectory (K–3)",
+    x = "Grade",
+    y = "Mean Math Score"
+  ) +
+  theme_minimal()
+
+plot(imp)
+
+summary(complete(imp,1)$math_K)
+summary(complete(imp,1)$math_1)
+summary(complete(imp,1)$math_2)
+summary(complete(imp,1)$math_3)
+```
+
+As a diagnostic check, we examined the mean math achievement trajectory across grades in the imputed datasets. The average scores increase steadily from Kindergarten through Grade 3, consistent with expected patterns of academic growth, indicating that the imputation procedure preserves the longitudinal structure of student achievement.
+
+Interpretation of the MICE Trace Plots
+
+The figure presents trace plots of the mean and standard deviation of the imputed variables across iterations of the MICE algorithm for the three math outcomes (math_1, math_2, and math_3). Each colored line represents one of the 20 imputed chains, and the horizontal axis shows the iteration number.
+
+Convergence behavior
+
+Across all panels, the chains fluctuate around stable central values rather than exhibiting systematic upward or downward trends. The lines show a typical “zig-zag” mixing pattern, which indicates that the Markov chains have reached a stationary distribution.
+
+Specifically:
+	•	The mean plots (left column) show that the estimated average math scores for each grade fluctuate narrowly around constant values across iterations.
+	•	The standard deviation plots (right column) similarly remain stable across iterations, suggesting that the variability of the imputed values is consistent across the chains.
+
+Mixing across chains
+
+Another important diagnostic feature is that the colored chains overlap and interweave, rather than forming separate clusters. This indicates that the multiple imputation chains mix well and explore the same posterior distribution.
+
+Poor mixing would appear as:
+	•	persistent separation between chains, or
+	•	monotonic trends across iterations.
+
+Neither pattern is present here.
+
+Implication for the imputation model
+
+Together, these diagnostics suggest that the MICE algorithm has converged successfully and that the imputed values are drawn from a stable distribution. Consequently, the resulting multiple imputation datasets can be considered reliable for subsequent statistical analysis.
+
+Convergence of the multiple imputation procedure was assessed using trace plots of the mean and standard deviation of the imputed math scores across iterations. The chains exhibit stable fluctuations and good mixing without systematic trends, indicating satisfactory convergence of the MICE algorithm.
+
+
