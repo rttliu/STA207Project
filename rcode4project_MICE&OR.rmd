@@ -419,6 +419,9 @@ p1
 ---
 
 ```{r}
+library(WeightIt)
+library(mice)
+
 stars_wide <- stars1 %>%
   select(student_id, grade, math_score, class_type, 
          student_gender, student_race, free_lunch, area_type) %>%
@@ -430,35 +433,55 @@ stars_wide <- stars1 %>%
   mutate(stayed_g3 = as.numeric(!is.na(math_score_3)))
 ```
 
-### Weighted
+```{r}
+# MICE only covariates
+
+# covariates imputation（not include math score）
+mice_cov_input <- stars_wide %>%
+  select(student_gender, student_race, free_lunch, area_type, class_type_K, stayed_g3)
+
+# run MICE (m=5)
+imp_cov <- mice(mice_cov_input, m = 5, method = "pmm", seed = 207, printFlag = FALSE)
+
+# extract one complete dataset
+stars_dr_ready <- complete(imp_cov, 1) %>%
+  # combine original math score (include NA)
+  bind_cols(stars_wide %>% select(math_score_3))
+```
 
 $$w_i = \frac{1}{\hat{P}(Stayed_i | X_i)}$$
 
 ```{r}
-library(WeightIt)
+# Double Robust
+# IPW + Outcome Regression
 
-weight_fit <- weightit(
+# calc IPW 
+ps_model_final <- weightit(
   stayed_g3 ~ student_gender + student_race + free_lunch + area_type + class_type_K,
-  data = stars_wide,
-  method = "ps", 
+  data = stars_dr_ready,
+  method = "ps",
   estimand = "ATE"
 )
+stars_dr_ready$ipw_weight <- ps_model_final$weights
 
-stars_wide$ipw_weight <- weight_fit$weights
+# DR model：combine PS and OR 
+# one of them is correct, the outcome is unbiased
+library(survey)
+dr_design_final <- svydesign(ids = ~1, weights = ~ipw_weight, data = stars_dr_ready)
 
-ps_model <- weightit(stayed_g3 ~ student_gender + student_race + free_lunch + area_type + class_type_K,
-                     data = stars_wide,
-                     method = "ps", 
-                     estimand = "ATE")
+dr_model_final <- svyglm(
+  math_score_3 ~ class_type_K + student_gender + student_race + free_lunch + area_type,
+  design = dr_design_final
+)
 
-stars_wide$ipw_weight <- ps_model$weights
+summary(dr_model_final)
 ```
 
-### MICE
-
 ```{r}
-library(mice)
+# contrast: MICE (Full Imputation)
+# include math score, as sensitivity analysis
 
+# use imp_data 
 mice_input <- stars_wide %>%
   select(math_score_K, math_score_1, math_score_2, math_score_3,
          student_gender, student_race, free_lunch, area_type, class_type_K)
@@ -466,29 +489,30 @@ mice_input <- stars_wide %>%
 imp_data <- mice(mice_input, m = 5, method = "pmm", seed = 207)
 
 densityplot(imp_data, ~math_score_3)
+
+# full 5 set, using ANOVA and conclude
+mice_full_fit <- with(imp_data, lm(math_score_3 ~ class_type_K + student_gender + student_race + free_lunch + area_type))
+mice_full_pooled <- pool(mice_full_fit)
 ```
 
 ```{r}
-imp_data$method
+# visualization
+# small class as contrast
 
-completed_data <- complete(imp_data, 1)
-colSums(is.na(completed_data))
-```
-
-### Double Robust
-
-Combine Propensity model and Outcome regeression
-
-$$\hat{\mu}_{DR} = \frac{1}{n} \sum_{i=1}^n \left[ \frac{I_i Y_i}{\hat{P}_i} - \frac{I_i - \hat{P}_i}{\hat{P}_i} \hat{m}(X_i) \right]$$
-
-```{r}
-library(survey)
-
-dr_design <- svydesign(ids = ~1, weights = ~ipw_weight, data = stars_wide)
-dr_model <- svyglm(
-  math_score_3 ~ class_type_K + student_gender + student_race + free_lunch + area_type, 
-  design = dr_design
+comparison_results <- data.frame(
+  Method = c("Doubly Robust (Primary)", "Full MICE (Sensitivity)"),
+  Estimate = c(coef(dr_model_final)["class_type_KSmall class"], 
+               summary(mice_full_pooled)$estimate[2]), # 假设第2行为 Small Class
+  StdError = c(SE(dr_model_final)["class_type_KSmall class"], 
+               summary(mice_full_pooled)$std.error[2])
 )
 
-summary(dr_model)
+ggplot(comparison_results, aes(x = Method, y = Estimate, color = Method)) +
+  geom_point(size = 4) +
+  geom_errorbar(aes(ymin = Estimate - 1.96*StdError, ymax = Estimate + 1.96*StdError), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Class Size Effect: DR vs Full MICE Comparison",
+       subtitle = "Estimating the effect of Small Class assignment on G3 Math Scores",
+       y = "Estimated ACE") +
+  theme_minimal()
 ```
