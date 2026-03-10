@@ -1,0 +1,114 @@
+---
+title: "Untitled"
+author: "Zhiye Jiang"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r libraries, message=FALSE, warning=FALSE}
+# Data Preparation and Cleaning
+### Load necessary libraries, covering data processing, string manipulation, visualization, and diagnostic analysis
+library(stringr)
+library(dplyr)
+library(tableone)
+library(tidyr)
+library(patchwork)
+library(purrr)
+library(rcompanion)
+library(psych)
+library(ggplot2)
+library(dlookr)
+library(modelsummary)
+library(broom)
+library(forcats)
+library(ggplot2)
+library(WeightIt)
+library(mice)
+```
+
+```{r}
+# ====================================================================
+# STEP 0: Load the Data
+# ====================================================================
+# Load the dataset exactly as you saved it from Phase 1
+stars1 <- readRDS("stars_cleaned_eda.rds")
+
+# ====================================================================
+# STEP 1: PRE-PROCESS (LOCF on Long Data)
+# ====================================================================
+stars1_locf <- stars1 %>%
+  # 1a. Sort chronologically for each student
+  arrange(student_id, grade) %>%
+  group_by(student_id) %>%
+  # 1b. Safely fill fixed demographic traits backwards and forwards ACROSS ROWS
+  fill(student_gender, student_race, birth_year, birth_month, .direction = "downup") %>%
+  ungroup()
+
+# ====================================================================
+# STEP 2: PIVOT TO WIDE FORMAT (For MICE and Causal Inference)
+# ====================================================================
+stars1_wide <- stars1_locf %>%
+  # 2a. Select only what we need
+  select(
+    student_id, grade, 
+    student_gender, student_race,                  # Constants
+    math_score, class_type, free_lunch, area_type, # Time-variant confounders/treatments
+    treads, wordsk                                 # Time-variant auxiliary predictors
+  ) %>%
+  # 2b. Pivot time-variant columns into grade-specific columns
+  pivot_wider(
+    names_from = grade,
+    values_from = c(math_score, class_type, free_lunch, area_type, treads, wordsk),
+    names_glue = "{.value}_{grade}"
+  ) %>%
+  # 2c. Create the critical target variable for the Doubly Robust missingness model
+  mutate(stayed_g3 = as.numeric(!is.na(math_score_3))) %>%
+  # 2d. Factorize everything so MICE knows what to do
+  mutate(across(c(student_gender, student_race, starts_with("class_type"), 
+                  starts_with("free_lunch"), starts_with("area_type")), as.factor))
+
+# Quick sanity check
+cat("Dimensions of Wide Data (Should equal total number of unique students):\n")
+dim(stars1_wide)
+```
+
+```{r}
+# ====================================================================
+# STEP 3: MICE Imputation (Imputing Z and A)
+# ====================================================================
+# We MUST drop student_id from the imputation process, otherwise MICE 
+# will try to use the student's ID number as a numeric predictor, 
+# which will ruin the math and take forever to run.
+
+stars_mice_input <- stars1_wide %>% select(-student_id)
+
+cat("Running MICE Engine... (This will take a moment with 27 columns)\n")
+set.seed(2026207)
+# m = 5 imputations. printFlag = FALSE keeps your console clean.
+imp_data <- mice(stars_mice_input, m = 20, maxit = 20, printFlag = FALSE)
+
+
+# ====================================================================
+# STEP 4: The MID Maneuver (Imputation then Deletion)
+# ====================================================================
+# Extract the long format of the imputed data (includes .imp == 0, the original data)
+long_data <- complete(imp_data, action = "long", include = TRUE)
+
+# The Deletion Step: Group by the unique row ID (.id) and force the imputed 
+# math_score_3 to perfectly match the original original data (.imp == 0)
+long_data <- long_data %>%
+  group_by(.id) %>%
+  mutate(math_score_3 = math_score_3[.imp == 0]) %>% 
+  ungroup()
+
+# Convert back to a MICE 'mids' object so the causal packages can read it
+imp_data_mid <- as.mids(long_data)
+
+# Sanity Check
+cat("\nMID Complete! Checking missingness in Imputed Dataset #1:\n")
+cat("math_score_3 NAs (Should be thousands, representing dropouts): ", 
+    sum(is.na(complete(imp_data_mid, 1)$math_score_3)), "\n")
+cat("free_lunch_K NAs (Should be 0, fully imputed): ", 
+    sum(is.na(complete(imp_data_mid, 1)$free_lunch_K)), "\n")
+```
+
