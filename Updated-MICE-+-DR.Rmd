@@ -24,6 +24,9 @@ library(forcats)
 library(ggplot2)
 library(WeightIt)
 library(mice)
+library(WeightIt)
+library(MatchThem)
+library(cobalt)
 ```
 
 ```{r}
@@ -47,32 +50,42 @@ stars1_locf <- stars1 %>%
 # ====================================================================
 # STEP 2: PIVOT TO WIDE FORMAT (For MICE and Causal Inference)
 # ====================================================================
+# ====================================================================
+# STEP 2 REVISED: PIVOT TO WIDE FORMAT (Keeping ALL Confounders)
+# ====================================================================
 stars1_wide <- stars1_locf %>%
-  # 2a. Select only what we need
-  select(
-    student_id, grade, 
-    student_gender, student_race,                  # Constants
-    math_score, class_type, free_lunch, area_type, # Time-variant confounders/treatments
-    treads, wordsk                                 # Time-variant auxiliary predictors
-  ) %>%
-  # 2b. Pivot time-variant columns into grade-specific columns
+  # 1. Select absolutely everything, but drop the manual lags if you want 
+  # (because Wide format natively creates lags, e.g., math_score_K IS the lag for Grade 1).
+  # If you want to keep them, just leave them in the time-variant list.
+  select(-math_lag1, -math_lag2, -math_lag3) %>% 
+  
   pivot_wider(
     names_from = grade,
-    values_from = c(math_score, class_type, free_lunch, area_type, treads, wordsk),
+    # 2. Put ALL time-variant variables here so they split by grade
+    values_from = c(
+      math_score, class_type, class_size, area_type, free_lunch,
+      school_id, teacher_id, teaching_years, teacher_degree, teacher_career, 
+      teacher_gender, teacher_race, 
+      treads, tlists, wordsk, motivr, selfco, readbs, mathbs
+    ),
     names_glue = "{.value}_{grade}"
   ) %>%
-  # 2c. Create the critical target variable for the Doubly Robust missingness model
+  # 3. Create the missingness indicator
   mutate(stayed_g3 = as.numeric(!is.na(math_score_3))) %>%
-  # 2d. Factorize everything so MICE knows what to do
-  mutate(across(c(student_gender, student_race, starts_with("class_type"), 
-                  starts_with("free_lunch"), starts_with("area_type")), as.factor))
+  # 4. Factorize (You will need to add the new categorical variables to this list)
+  mutate(across(c(student_gender, student_race, 
+                  starts_with("class_type"), starts_with("free_lunch"), 
+                  starts_with("area_type"), starts_with("teacher_gender"),
+                  starts_with("teacher_race"), starts_with("teacher_degree"),
+                  starts_with("teacher_career")), as.factor))
 
 # Quick sanity check
-cat("Dimensions of Wide Data (Should equal total number of unique students):\n")
+cat("New Dimensions of Wide Data:\n")
 dim(stars1_wide)
 ```
 
 ```{r}
+library(future)
 # ====================================================================
 # STEP 3: MICE Imputation (Imputing Z and A)
 # ====================================================================
@@ -80,35 +93,140 @@ dim(stars1_wide)
 # will try to use the student's ID number as a numeric predictor, 
 # which will ruin the math and take forever to run.
 
-stars_mice_input <- stars1_wide %>% select(-student_id)
+# We create a specific dataset just for MICE by stripping out the math hazards:
+# 1. Drop all IDs (Student, School, Teacher)
+# 2. Drop class_size (redundant with class_type)
+# 3. Drop stayed_g3 (we will use it later in WeightIt, not here)
+stars_mice_input <- stars1_wide %>%
+  select(
+    -student_id,
+    -starts_with("school_id"),
+    -starts_with("teacher_id"),
+    -starts_with("class_size"),
+    -stayed_g3
+  )
 
-cat("Running MICE Engine... (This will take a moment with 27 columns)\n")
-set.seed(2026207)
-# m = 5 imputations. printFlag = FALSE keeps your console clean.
-imp_data <- mice(stars_mice_input, m = 20, maxit = 20, printFlag = FALSE)
+cat("Running Parallel MICE Engine... (Unleashing the 9800X3D!)\n")
 
+imp_data <- futuremice(
+  stars_mice_input, 
+  m = 20, 
+  maxit = 20, 
+  parallelseed = 2026207,      # 保证并行计算结果可重现
 
+)
+
+# 跑完后关闭并行池，释放后台资源（好习惯）
+plan(sequential)
+
+# Check if it succeeded!
+cat("Parallel MICE successfully completed!\n")
+```
+```{r}
+# 加载画图需要的包
+library(lattice)
+
+# 检查一年级数学成绩的填补分布
+densityplot(imp_data, ~ readbs_1)
+
+# 检查一年级老师教龄的填补分布
+densityplot(imp_data, ~ teaching_years_1)
+```
+
+```{r}
 # ====================================================================
 # STEP 4: The MID Maneuver (Imputation then Deletion)
 # ====================================================================
-# Extract the long format of the imputed data (includes .imp == 0, the original data)
+# 1. Extract the long format of the imputed data
 long_data <- complete(imp_data, action = "long", include = TRUE)
 
-# The Deletion Step: Group by the unique row ID (.id) and force the imputed 
-# math_score_3 to perfectly match the original original data (.imp == 0)
+# 2. Grab the dropped columns (student_id and stayed_g3) from the original wide dataset
+# We create a matching .id column based on row numbers
+stars_dropped_cols <- stars1_wide %>%
+  mutate(.id = row_number()) %>%
+  select(.id, student_id, stayed_g3)
+
+# 3. Join them back into the long MICE data, and do your brilliant MID Deletion Step
 long_data <- long_data %>%
+  left_join(stars_dropped_cols, by = ".id") %>%
   group_by(.id) %>%
   mutate(math_score_3 = math_score_3[.imp == 0]) %>% 
   ungroup()
 
-# Convert back to a MICE 'mids' object so the causal packages can read it
+# 4. Convert back to a MICE 'mids' object so the causal packages can read it
 imp_data_mid <- as.mids(long_data)
 
 # Sanity Check
 cat("\nMID Complete! Checking missingness in Imputed Dataset #1:\n")
-cat("math_score_3 NAs (Should be thousands, representing dropouts): ", 
+cat("math_score_3 NAs (Should be thousands): ", 
     sum(is.na(complete(imp_data_mid, 1)$math_score_3)), "\n")
 cat("free_lunch_K NAs (Should be 0, fully imputed): ", 
     sum(is.na(complete(imp_data_mid, 1)$free_lunch_K)), "\n")
+cat("Did stayed_g3 successfully reattach? (Should be TRUE): ", 
+    "stayed_g3" %in% colnames(complete(imp_data_mid, 1)), "\n")
+```
+
+```{r}
+# ====================================================================
+# STEP 5 (终极版): 使用你指定的 71 列中最相关的 K-G2 变量
+# ====================================================================
+
+# 1. 定义你刚才列出的这个完美公式
+formula_seaman_full <- stayed_g3 ~ 
+  student_gender + student_race + birth_year +
+  math_score_K + math_score_1 + math_score_2 +
+  treads_K + treads_1 + treads_2 +
+  tlists_K + tlists_1 + tlists_2 +
+  wordsk_K + wordsk_1 + wordsk_2 +
+  teacher_degree_K + teacher_degree_1 + teacher_degree_2 +
+  teaching_years_K + teaching_years_1 + teaching_years_2 +
+  class_type_K + class_type_1 + class_type_2 +
+  free_lunch_K + free_lunch_1 + free_lunch_2 +
+  area_type_K + area_type_1 + area_type_2
+
+cat("Running the full Seaman & Vansteelandt weight model...\n")
+
+# 2. 运行权重模型
+weights_full <- weightthem(
+  formula_seaman_full,
+  datasets = imp_data_mid,
+  method = "ps",
+  estimand = "ATE",
+  approach = "within"
+)
+
+# 3. 验证平衡性
+# 如果这个长公式运行成功，你的蓝点应该会非常漂亮地对齐
+love.plot(weights_full, stats = "m", threshold = .1, abs = TRUE)
+```
+
+```{r}
+# ====================================================================
+# STEP 6: 最终的 Doubly Robust 估计 (符合计划书 Defense 2 规范)
+# ====================================================================
+library(mice)
+
+cat("正在运行符合 Seaman (2018) 规范的结果模型...\n")
+
+# 1. 在加权后的 20 个数据集上运行线性回归
+# 根据计划书第4页要求：显式包含 Class_Size * Grade 的交互逻辑 (此处以 math_score_2 作为代理)
+fit_dr <- with(weights_full, 
+               lm(math_score_3 ~ class_type_3 * math_score_2 + 
+                  # 计划书要求控制的其他三年级混杂因子
+                  free_lunch_3 + area_type_3 + 
+                  teacher_degree_3 + teaching_years_3 + teacher_race_3 +
+                  # 加入基线特征以提高效率 (Efficiency)
+                  student_gender + student_race + math_score_K))
+
+# 2. 依照 Rubin's Rules 进行池化合并
+final_pooled_results <- pool(fit_dr)
+
+# 3. 打印最终因果效应
+cat("\n========================================================\n")
+cat("   FINAL DR ESTIMATE (Project STAR Year 3)              \n")
+cat("========================================================\n")
+# 提取小班教学(Small Class)的效应量
+summary_df <- summary(final_pooled_results, conf.int = TRUE)
+print(summary_df[summary_df$term == "class_type_3Small class", ])
 ```
 
