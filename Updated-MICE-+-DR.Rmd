@@ -85,33 +85,58 @@ saveRDS(stars1_wide, "stars1_wide_final.rds")
 ```{r}
 library(future)
 # ====================================================================
-# STEP 3: MICE Imputation (Imputing Z and A)
+# REVISED STEP 3: MICE Imputation with Cluster Awareness
 # ====================================================================
-# We MUST drop student_id from the imputation process, otherwise MICE 
-# will try to use the student's ID number as a numeric predictor, 
-# which will ruin the math and take forever to run.
 
-# We create a specific dataset just for MICE by stripping out the math hazards:
-# 1. Drop all IDs (Student, School, Teacher)
-# 2. Drop class_size (redundant with class_type)
-# 3. Drop stayed_g3 (we will use it later in WeightIt, not here)
+
+# 1. Clean the input: Remove the constant variables flagged by mice
 stars_mice_input <- stars1_wide %>%
   select(
-    -student_id,
-    -starts_with("school_id"),
-    -starts_with("teacher_id"),
+    -student_id,       # Remove ID from the math
+    -stayed_g3, 
+    -starts_with("teacher_id"), 
     -starts_with("class_size"),
-    -stayed_g3
+    -teacher_gender_K, # Flagged as constant
+    -readbs_K,         # Flagged as constant
+    -mathbs_K,          # Flagged as constant\
+    # DROP THE ALIASES: We only need the baseline Area Type
+    -area_type_1, -area_type_2, -area_type_3
   )
 
-cat("Running Parallel MICE Engine... (Unleashing the 9800X3D!)\n")
+# Dry run with 0 iterations
+ini <- mice(stars_mice_input, maxit = 0)
 
+# See what method was assigned to each variable
+# ini$method
+
+
+# 2. Start with the sparse matrix (mincor = 0.15) to prevent singularity
+pred_final <- quickpred(stars_mice_input, mincor = 0.15)
+
+# 3. Identify our EDA "Must-Haves"
+must_haves <- c("free_lunch_K", "free_lunch_1", "free_lunch_2", "free_lunch_3",
+                "school_id_K", "school_id_1", "school_id_2", "school_id_3",
+                "student_race", "area_type_K")
+
+# 4. Identify our Target Outcomes (Math Scores)
+math_outcomes <- c("math_score_K", "math_score_1", "math_score_2", "math_score_3")
+
+# 4. FORCE the Must-Haves to predict the Math Outcomes
+# This ensures that even if correlation was < 0.15 in a specific slice, 
+# the structural and socio-economic context is always used.
+pred_final[math_outcomes, must_haves] <- 1
+
+# 5. Clean up: Ensure student_id is NEVER a predictor (Safety check)
+if("student_id" %in% colnames(pred_final)) pred_final[, "student_id"] <- 0
+
+# 3. Final Execution
 imp_data <- futuremice(
-  stars_mice_input, 
-  m = 20, 
-  maxit = 20, 
-  parallelseed = 2026207,      # 保证并行计算结果可重现
-
+  stars_mice_input,
+  m = 20,
+  maxit = 20,
+  predictorMatrix = pred_final, # Using the thinned-out matrix
+  ridge = 0.001,                  # Safety net for singularity
+  parallelseed = 2026207
 )
 
 # 跑完后关闭并行池，释放后台资源（好习惯）
@@ -119,6 +144,41 @@ plan(sequential)
 
 # Check if it succeeded!
 cat("Parallel MICE successfully completed!\n")
+```
+Redundant Area/School Info: If area_type_K (Urban/Rural) is constant for every student within school_id_K, and you have both in the model, they are perfectly collinear.Constant Variables: Check if any column has the same value for almost everyone (e.g., if almost all students in your subset are the same race or have the same teacher degree).The "Wide Data" Trap: You have math_score_K, math_score_1, math_score_2, and math_score_3. If these are extremely highly correlated ($r > 0.95$), the matrix becomes unstable.
+
+```{r}
+# Extract one imputed dataset (e.g., the 1st one)
+check_data <- complete(imp_data, 1)
+
+# Check for missing values in your key columns
+colSums(is.na(check_data[, c("free_lunch_3", "student_race", "school_id_K", "treads_3")]))
+
+# Red lines = Imputed values; Blue line = Observed values
+densityplot(imp_data, ~ math_score_3 + treads_3 + free_lunch_3)
+
+```
+```{r}
+# Check the relationship between a covariate (e.g., Reading) and the outcome (Math)
+xyplot(imp_data, math_score_3 ~ treads_3, pch = 18, cex = 0.7)
+
+
+```
+
+```{r}
+# Compare the proportion of "Free Lunch" in observed vs imputed
+prop.table(table(stars1_wide$free_lunch_3)) # Original
+prop.table(table(check_data$free_lunch_3))   # Imputed
+
+```
+
+```{r}
+# Plot convergence for your primary outcome and a key covariate
+plot(imp_data, c("math_score_3", "free_lunch_3"))
+
+pred_refined <- quickpred(stars_mice_input, mincor = 0.15)
+
+pred_refined
 ```
 
 ```{r}
@@ -180,260 +240,4 @@ print(colSums(is.na(stars_dr_prepared[, math_cols])))
 cat("\n检查点 2: 协变量（如 free_lunch_K）是否还有 NA?\n")
 print(sum(is.na(stars_dr_prepared$free_lunch_K)))
 # 预期结果：0 (已被 MICE 填满)
-```
-
-```{r}
-# ====================================================================
-# STEP 5: Missingness Model (The IPW Basis)
-# ====================================================================
-
-# 1. 拟合逻辑回归模型
-# 我们使用 MICE 填补好的完整协变量来预测 'stayed_g3' (即 Ri)
-miss_model <- glm(
-  stayed_g3 ~ student_race + student_gender + birth_year + 
-              free_lunch_K + area_type_K, 
-  data = stars_dr_prepared, 
-  family = binomial(link = "logit")
-)
-
-# 2. 计算倾向得分 pi_hat
-stars_dr_prepared <- stars_dr_prepared %>%
-  mutate(pi_hat = predict(miss_model, type = "response"))
-
-# --- 快速检查 ---
-cat("检查点 3a: 倾向得分 (pi_hat) 摘要\n")
-print(summary(stars_dr_prepared$pi_hat))
-
-# 检查 Positivity Assumption: 是否所有 pi_hat 都严格大于 0 且小于 1？
-cat("\n检查点 3b: 是否存在极端的权重 (Positivity Check)?\n")
-# 如果有值非常接近 0 (例如 < 0.01)，则需要注意
-print(range(stars_dr_prepared$pi_hat))
-```
-
-```{r}
-# ====================================================================
-# STEP 6: Outcome Model & DR Estimation (The Grand Finale)
-# ====================================================================
-
-# 1. 拟合结果模型 (Outcome Model)
-# 我们只在观测到 Y3 的样本上训练。
-# 变量选择：使用 MICE 填好的 100% 完整变量，确保“共轭性” (Congeniality)
-outcome_model <- lm(
-  math_score_3 ~ class_type_3 + student_race + student_gender + 
-                 free_lunch_3 + area_type_3 + teacher_degree_3, 
-  data = subset(stars_dr_prepared, stayed_g3 == 1)
-)
-
-# 2. 生成预测值 m_hat (针对全体样本)
-# 因为自变量在第四步后都是完整的，所以这里不会产生任何新的 NA
-stars_dr_prepared$m_hat <- predict(outcome_model, newdata = stars_dr_prepared)
-
-# 3. 执行 AIPW (Doubly Robust) 计算公式
-# 根据 Seaman (2018)，公式为：E[m_hat + R/pi_hat * (Y - m_hat)]
-stars_dr_final <- stars_dr_prepared %>%
-  mutate(
-    # 计算误差修正项：如果是缺失值(R=0)，修正项为 0；如果是观测值(R=1)，进行逆概率加权
-    dr_correction = ifelse(stayed_g3 == 1, 
-                           (1 / pi_hat) * (math_score_3 - m_hat), 
-                           0),
-    # 每一位学生的 DR 贡献值
-    dr_pseudo_outcome = m_hat + dr_correction
-  )
-
-# 4. 汇总结果：得到全校范围内的无偏均值估计
-final_summary <- stars_dr_final %>%
-  summarize(
-    DR_Mean = mean(dr_pseudo_outcome),
-    Observed_Mean = mean(math_score_3, na.rm = TRUE),
-    Sample_Size = n()
-  )
-
-# --- 快速检查 ---
-cat("检查点 4: 最终 DR 估计 vs 原始观测均值\n")
-print(final_summary)
-```
-```{r}
-# 对比原始分布和 DR 修正后的均值分布
-ggplot(stars_dr_final) +
-  geom_density(aes(x = math_score_3, fill = "Observed"), alpha = 0.3) +
-  geom_density(aes(x = dr_pseudo_outcome, fill = "DR Adjusted"), alpha = 0.3) +
-  labs(title = "Effect of DR Adjustment on Math Score Distribution",
-       x = "Year 3 Math Score", fill = "Method")
-```
-
-```{r}
-# ====================================================================
-# STEP 7: 最终因果效应评估 (Causal Effect via DR)
-# ====================================================================
-
-# 1. 对比不同班级类型在 DR 修正后的得分
-final_effect <- stars_dr_final %>%
-  group_by(class_type_3) %>%
-  summarize(
-    DR_Adjusted_Mean = mean(dr_pseudo_outcome),
-    Observed_Mean = mean(math_score_3, na.rm = TRUE),
-    # 偏差修正量：负值表示该组流失了较多差生
-    Bias_Correction = DR_Adjusted_Mean - Observed_Mean 
-  )
-
-# 正确的替代方案：衡量班级类型对三年级成绩的影响，同时控制背景
-final_model <- lm(dr_pseudo_outcome ~ class_type_3 + student_race + free_lunch_3, 
-                  data = stars_dr_final)
-
-summary(final_model)
-```
-
-```{r}
-# ====================================================================
-# STEP 7: 构建用于 ANOVA 的长表 (集成 DR 修正值)
-# ====================================================================
-
-# 1. 提取 K, 1, 2 年级的原始观测数据 (以及背景协变量)
-stars_long_base <- stars1_wide %>%
-  select(student_id, 
-         # 选择我们要分析的成绩和班级类型
-         math_score_K, math_score_1, math_score_2,
-         class_type_K, class_type_1, class_type_2) %>%
-  pivot_longer(
-    cols = -student_id,
-    # 正则表达式：(变量名)_(年级后缀)
-    names_pattern = "(.*)_(K|1|2)", 
-    names_to = c(".value", "grade_label")
-  ) %>%
-  mutate(grade = case_when(
-    grade_label == "K" ~ "Grade 0",
-    grade_label == "1" ~ "Grade 1",
-    grade_label == "2" ~ "Grade 2"
-  )) %>%
-  select(-grade_label)
-
-# 2. 准备 Year 3 的 DR 修正数据
-# 注意：列名必须与上面的 math_score 和 class_type 完全一致
-stars_g3_dr <- stars_dr_final %>%
-  select(student_id, class_type_3, dr_pseudo_outcome) %>%
-  rename(math_score = dr_pseudo_outcome, 
-         class_type = class_type_3) %>%
-  mutate(grade = "Grade 3")
-
-# 3. 合并
-stars_long_final <- bind_rows(stars_long_base, stars_g3_dr) %>%
-  mutate(
-    grade = factor(grade, levels = c("Grade 0", "Grade 1", "Grade 2", "Grade 3")),
-    class_type = factor(class_type)
-  ) %>%
-  # 剔除那些在特定年级没有班级记录的学生行（可选）
-  filter(!is.na(class_type))
-
-# --- 验证数据结构 ---
-cat("检查点 6: 最终长表结构\n")
-str(stars_long_final)
-# 预期：11601 * 4 = 46404 行左右，列只有 student_id, math_score, class_type, grade
-```
-
-```{r}
-# 重新整合长表，确保每个 student_id 都有 4 行
-stars_long_final <- stars_long_final %>%
-  # 这一步会自动补齐缺失的年级行
-  complete(student_id, grade) %>%
-  # 关键：我们需要把 class_type 补齐，因为 ANOVA 不允许自变量缺失
-  group_by(student_id) %>%
-  fill(class_type, .direction = "downup") %>%
-  ungroup()
-
-# 再次检查行数
-cat("修正后行数:", nrow(stars_long_final), "(预期应接近 46404)\n")
-```
-
-```{r}
-# 运行 ANOVA
-# math_score 是包含 DR 修正值的混合得分
-# class_type 是班级类型
-# grade 是年级（0-3）
-model_anova <- aov(math_score ~ class_type * grade, data = stars_long_final)
-
-cat("\n--- 最终双因素方差分析结果 ---\n")
-summary(model_anova)
-
-# 进一步查看交互作用的具体表现 (Post-hoc)
-cat("\n--- 交互效应各组均值 ---\n")
-print(model.tables(model_anova, "means"))
-```
-
-```{r}
-# 运行 Tukey 事后检验，重点看各个年级下 class_type 的两两对比
-TukeyHSD(model_anova, which = "class_type:grade")
-```
-
-```{r}
-# 定义三种不同复杂度的结果模型
-specs <- list(
-  "Minimal"  = math_score_3 ~ class_type_3 + student_race,
-  "Standard" = math_score_3 ~ class_type_3 + student_race + free_lunch_3 + student_gender,
-  "Full"     = math_score_3 ~ class_type_3 + student_race + free_lunch_3 + student_gender + 
-                               area_type_3 + teacher_degree_3
-)
-
-# 循环计算不同模型下的 DR Mean
-sensitivity_results <- lapply(specs, function(formula) {
-  m <- lm(formula, data = subset(stars_dr_prepared, stayed_g3 == 1))
-  m_hat <- predict(m, newdata = stars_dr_prepared)
-  # 使用之前算好的 pi_hat
-  dr_pseudo <- m_hat + ifelse(stars_dr_prepared$stayed_g3 == 1, 
-                              (1/stars_dr_prepared$pi_hat)*(stars_dr_prepared$math_score_3 - m_hat), 0)
-  mean(dr_pseudo)
-})
-
-print(unlist(sensitivity_results))
-
-```
-
-```{r}
-# 对权重进行修剪 (Trimming)
-stars_dr_final <- stars_dr_final %>%
-  mutate(weight = 1/pi_hat,
-         # 将极端的权重限制在 5% 到 95% 分位数之间
-         trimmed_weight = pmin(pmax(weight, quantile(weight, 0.05)), quantile(weight, 0.95)))
-
-# 计算修剪后的均值
-trimmed_mean <- mean(stars_dr_final$m_hat + 
-                     ifelse(stars_dr_final$stayed_g3 == 1, 
-                            stars_dr_final$trimmed_weight * (stars_dr_final$math_score_3 - stars_dr_final$m_hat), 0))
-
-cat("原始 DR 均值:", 616.41, "\n权重修剪后均值:", trimmed_mean)
-```
-
-```{r}
-# 模拟：假设流失学生的真实成绩比模型预测的还要低 delta 分
-deltas <- seq(0, 20, by = 5) # 假设低 0 到 20 分
-impact_on_ate <- sapply(deltas, function(d) {
-  # 对 R=0 的人减去 delta
-  adjusted_pseudo = stars_dr_final$dr_pseudo_outcome
-  adjusted_pseudo[stars_dr_final$stayed_g3 == 0] <- adjusted_pseudo[stars_dr_final$stayed_g3 == 0] - d
-  
-  # 重新运行模型看 class_typeSmall 的系数
-  coef(lm(adjusted_pseudo ~ class_type_3, data = stars_dr_final))["class_type_3Small class"]
-})
-
-names(impact_on_ate) <- deltas
-print(impact_on_ate)
-
-```
-
-```{r}
-# 准备绘图数据（来自你的 Tukey HSD 结果）
-effect_data <- data.frame(
-  Grade = c("Kindergarten", "Grade 1", "Grade 2", "Grade 3 (DR)"),
-  Estimate = c(7.94, 11.36, 8.40, 7.54),
-  Lower = c(3.76, 7.35, 4.27, 4.63),
-  Upper = c(12.11, 15.36, 12.53, 10.44)
-)
-
-ggplot(effect_data, aes(x = Grade, y = Estimate)) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  geom_point(size = 4, color = "#2c3e50") +
-  geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2, size = 1, color = "#2c3e50") +
-  labs(title = "Causal Effect of Small Class Size Across Grades",
-       subtitle = "Grade 3 effect is Doubly Robust adjusted",
-       y = "Score Advantage (Small vs. Regular)", x = "") +
-  theme_minimal()
 ```
