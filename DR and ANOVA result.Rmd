@@ -1,4 +1,4 @@
----
+﻿---
 title: "Project STAR: 班级规模对学业成就的因果推断报告"
 author: "Your Name"
 date: "`r Sys.Date()`"
@@ -12,26 +12,14 @@ output:
 
 ```{r libraries, message=FALSE, warning=FALSE}
 # Data Preparation and Cleaning
-### Load necessary libraries, covering data processing, string manipulation, visualization, and diagnostic analysis
-library(stringr)
+### Load necessary libraries, covering data processing, multiple imputation, and modeling
 library(dplyr)
-library(tableone)
 library(tidyr)
-library(patchwork)
-library(purrr)
-library(rcompanion)
-library(psych)
 library(ggplot2)
-library(dlookr)
-library(modelsummary)
-library(broom)
-library(forcats)
-library(ggplot2)
-library(WeightIt)
 library(mice)
-library(WeightIt)
-library(MatchThem)
-library(cobalt)
+library(lme4)
+library(broom.mixed)
+
 ```
 
 
@@ -40,575 +28,199 @@ library(cobalt)
 # 这里确保变量名与你之前的 DR 代码块一致
 imp_data <- readRDS("stars_mice_mids.rds")      # 读入 mids 对象
 stars1_wide <- readRDS("stars1_wide_final.rds") # 读入原始宽表（含 stayed_g3）
-
-# --- 第二步：数据准备 (衔接你接下来的代码) ---
-# 提取第 1 次插补的结果
-completed_data <- complete(imp_data, 1)
-
-# 定义需要还原 NA 的成绩列
-math_cols <- c("math_score_K", "math_score_1", "math_score_2", "math_score_3")
-
-# 执行还原与合并（这就是你代码中开始处理的地方）
-stars_dr_prepared <- completed_data %>%
-  mutate(
-    student_id = stars1_wide$student_id,
-    stayed_g3  = stars1_wide$stayed_g3
-  ) %>%
-  mutate(across(all_of(math_cols), ~ stars1_wide[[cur_column()]]))
 ```
+
 
 ```{r}
 # ====================================================================
-# 优化方案：循环处理 20 个插补集并汇总 DR 结果
+# STEP 6: 20次插补全量 AIPW 估计 (纵向 Mixed Model 版)
 # ====================================================================
 
-m <- imp_data$m  # 假设插补次数为 20
-dr_results_list <- list()
+m <- imp_data$m  
+math_cols <- c("math_score_K", "math_score_1", "math_score_2", "math_score_3")
+# 我们需要存储的是转换后的长表数据集，或者直接存储模型
+# 预分配列表长度，避免未定义条目
+ dr_models_list <- vector("list", m)
+ failed_idx <- integer(0)
+
+cat("开始在 20 个插补集上运行 Stage 2 (AIPW) & Stage 3 (Longitudinal Mixed Model)...\n")
 
 for (i in 1:m) {
-  # 1. 提取第 i 个插补集
-  current_data <- complete(imp_data, i)
+  # 1. 【安全提取】
+  current_prepared <- complete(imp_data, i)
   
-  # 2. 还原结果变量 NA (保持与原始缺失模式一致)
-  current_prepared <- current_data %>%
-    mutate(
-      student_id = stars1_wide$student_id,
-      stayed_g3  = stars1_wide$stayed_g3
-    ) %>%
-    mutate(across(all_of(math_cols), ~ stars1_wide[[cur_column()]]))
+  # 2. 【即时加工】：补齐所有年级的 school_id 和其他控制变量
+  current_prepared$student_id  <- stars1_wide$student_id
+  current_prepared$stayed_g3   <- stars1_wide$stayed_g3
+  # 补齐 K-3 的所有学校 ID
+  for(s_id in c("school_id_K", "school_id_1", "school_id_2", "school_id_3")) {
+    current_prepared[[s_id]] <- stars1_wide[[s_id]]
+  }
   
-  # 3. 拟合缺失模型 (PS Model)
+  # 还原所有年级的数学成绩为原始 NA
+  for(col in math_cols) {
+    current_prepared[[col]] <- stars1_wide[[col]]
+  }
+  
+  # 3. 【Stage 2.1: PS Model】：预测留在样本中的概率 (以 G3 为准或针对各年级)
   ps_fit <- glm(stayed_g3 ~ student_race + student_gender + birth_year + 
                 free_lunch_K + area_type_K, 
-                data = current_prepared, family = binomial)
+                data = current_prepared, family = binomial())
   pi_hat <- predict(ps_fit, type = "response")
   
-  # 4. 拟合结果模型 (Outcome Model) - 仅用观测值
-  out_fit <- lm(math_score_3 ~ class_type_3 + student_race + student_gender + 
-                free_lunch_3 + area_type_3 + teacher_degree_3, 
-                data = subset(current_prepared, stayed_g3 == 1))
-  m_hat <- predict(out_fit, newdata = current_prepared)
+  # 4. 【Stage 2.2: 多年级 AIPW 计算】
+  # 为 K, 1, 2, 3 四个年级分别生成 DR 伪结果
+  for (g in c("K", "1", "2", "3")) {
+    y_name <- paste0("math_score_", g)
+    s_name <- paste0("school_id_", g)
+    l_name <- paste0("free_lunch_", g)
+    
+    # 结果模型 (Outcome Model for Grade g)
+    # 只使用该年级有成绩的观测值
+    formula_out <- as.formula(paste(y_name, "~ class_type_K + student_race + student_gender +", 
+                                    l_name, "+ area_type_K + (1 |", s_name, ")"))
+    
+    out_fit <- lmer(formula_out, data = current_prepared[!is.na(current_prepared[[y_name]]), ])
+    
+    # 预测值 (所有人)
+    m_hat <- predict(out_fit, newdata = current_prepared, allow.new.levels = TRUE)
+    
+    # 执行 AIPW 公式
+    y_obs <- current_prepared[[y_name]]
+    r_ind <- as.numeric(!is.na(y_obs))
+    
+    current_prepared[[paste0("dr_math_", g)]] <- m_hat + (r_ind / pi_hat) * (tidyr::replace_na(y_obs, 0) - m_hat)
+  }
   
-  # 5. 计算 AIPW Pseudo-outcome
-  y_obs <- current_prepared$math_score_3
-  r_ind <- current_prepared$stayed_g3
+  # 5. 【数据转换】：宽表转长表以支持 Stage 3 公式 (3)
+  current_long <- current_prepared %>%
+    pivot_longer(
+      cols = starts_with("dr_math_"),
+      names_to = "grade",
+      names_prefix = "dr_math_",
+      values_to = "dr_outcome"
+    ) %>%
+    mutate(grade = factor(grade, levels = c("K", "1", "2", "3")))
+
+  # 6. 【Stage 3: Randomized Mixed-Effects Model】
+  # 拟合公式 (3): 包含班级效应、协变量、时间(Grade)和学校随机截距
+  fit_i <- tryCatch(
+    lmer(dr_outcome ~ class_type_K + student_race + 
+         free_lunch_K + grade + (1 | school_id_K), 
+         data = current_long),
+    error = function(e) e,
+    warning = function(w) w
+  )
+
+  if (inherits(fit_i, "error")) {
+    warning("lmer failed at i=", i, ": ", conditionMessage(fit_i))
+    failed_idx <- c(failed_idx, i)
+    dr_models_list[[i]] <- NULL
+  } else {
+    dr_models_list[[i]] <- fit_i
+  }
   
-  # AIPW 公式实现
-  dr_pseudo <- m_hat + (r_ind / pi_hat) * (replace_na(y_obs, 0) - m_hat)
-  
-  # 6. 对当前这个“平行世界”运行最终效应模型
-  current_res_model <- lm(dr_pseudo ~ class_type_3 + student_race + free_lunch_3, 
-                          data = current_prepared)
-  
-  dr_results_list[[i]] <- current_res_model
+  if(i %% 5 == 0) cat("已完成第", i, "个数据集的计算...\n")
 }
 
-# 7. 使用 Rubin's Rules 汇总 20 个模型的结果
-library(mice)
-mira_obj <- as.mira(dr_results_list)
+# ====================================================================
+# STEP 7: 汇总 (Pooling)
+# ====================================================================
+
+if (length(failed_idx) > 0) {
+  stop("以下插补集模型失败：", paste(failed_idx, collapse = ", "), "。请先修复 STEP 6 后再运行 STEP 7。")
+}
+
+valid_models <- sapply(dr_models_list, function(x) inherits(x, "merMod"))
+if (!all(valid_models)) {
+  stop("dr_models_list 含非 merMod 模型条目，无法 pool。failed idx:", 
+       paste(which(!valid_models), collapse = ", "))
+}
+
+mira_obj <- as.mira(dr_models_list)
 final_pooled_dr <- pool(mira_obj)
 
-# 查看最精准的、汇总后的因果效应
-summary(final_pooled_dr)
-```
-
-
-```{r}
-# 加载画图需要的包
-library(lattice)
-
-# 检查一年级数学成绩的填补分布
-densityplot(imp_data, ~ readbs_1)
-
-# 检查一年级老师教龄的填补分布
-densityplot(imp_data, ~ teaching_years_1)
-```
-
-```{r}
-# 1. 提取填补后的数据集 (通常对 m 个数据集分别操作，这里以第 1 个为例)
-completed_data <- complete(imp_data, 1)
-
-# 2. 定义所有需要还原 NA 的成绩列
-# 根据你的 Wide Format，我们需要还原 K 到 3 年级的所有成绩
-math_cols <- c("math_score_K", "math_score_1", "math_score_2", "math_score_3")
-
-# 3. 执行还原：只保留协变量的填补，成绩设回原始的 NA
-stars_dr_prepared <- completed_data %>%
-  mutate(
-    student_id = stars1_wide$student_id,
-    stayed_g3  = stars1_wide$stayed_g3
-  ) %>%
-  mutate(across(all_of(math_cols), ~ stars1_wide[[cur_column()]]))
-
-# --- 快速检查 ---
-cat("检查点 1: 数学成绩是否含有 NA?\n")
-print(colSums(is.na(stars_dr_prepared[, math_cols]))) 
-# 预期结果：这些列的 NA 数量应与 stars1_wide 完全一致
-
-cat("\n检查点 2: 协变量（如 free_lunch_K）是否还有 NA?\n")
-print(sum(is.na(stars_dr_prepared$free_lunch_K)))
-# 预期结果：0 (已被 MICE 填满)
+cat("\n--- Stage 3: 最终纵向双重稳健估计汇总结果 ---\n")
+print(summary(final_pooled_dr, conf.int = TRUE))
 ```
 
 ```{r}
 # ====================================================================
-# STEP 5: Missingness Model (The IPW Basis)
+# STEP 8: 准备可视化预测数据
 # ====================================================================
 
-# 1. 拟合逻辑回归模型
-# 我们使用 MICE 填补好的完整协变量来预测 'stayed_g3' (即 Ri)
-miss_model <- glm(
-  stayed_g3 ~ class_type_3 + student_race + student_gender + birth_year + 
-              free_lunch_K + area_type_K, 
-  data = stars_dr_prepared, 
-  family = binomial(link = "logit")
+# 1. 创建用于预测的虚拟数据集
+# 保持协变量为基准值（如：最常见的类别）
+pred_data <- expand.grid(
+  class_type_K = c("Regular class", "Small class"),
+  grade = c("K", "1", "2", "3"),
+  student_race = "Non-Black",       # 设为基准组
+  free_lunch_K = "Non-free lunch"   # 设为基准组
 )
 
-# 2. 计算倾向得分 pi_hat
-stars_dr_prepared <- stars_dr_prepared %>%
-  mutate(pi_hat = predict(miss_model, type = "response"))
+# 2. 确保 grade 是有序因子
+pred_data$grade <- factor(pred_data$grade, levels = c("K", "1", "2", "3"))
 
-# --- 快速检查 ---
-cat("检查点 3a: 倾向得分 (pi_hat) 摘要\n")
-print(summary(stars_dr_prepared$pi_hat))
+# 3. 从汇总模型中提取系数 (Beta counts)
+# 注意：这步需要手动构建，因为 pool() 后的对象不能直接 predict()
+betas <- summary(final_pooled_dr)$estimate
+names(betas) <- summary(final_pooled_dr)$term
 
-# 检查 Positivity Assumption: 是否所有 pi_hat 都严格大于 0 且小于 1？
-cat("\n检查点 3b: 是否存在极端的权重 (Positivity Check)?\n")
-# 如果有值非常接近 0 (例如 < 0.01)，则需要注意
-print(range(stars_dr_prepared$pi_hat))
-```
+# 4. 手动计算预测分值 (基于你的 Stage 3 公式 3)
+pred_data <- pred_data %>%
+  mutate(predicted_score = case_when(
+    # 常规班 (Baselines)
+    class_type_K == "Regular class" & grade == "K" ~ betas["(Intercept)"],
+    class_type_K == "Regular class" & grade == "1" ~ betas["(Intercept)"] + betas["grade1"],
+    class_type_K == "Regular class" & grade == "2" ~ betas["(Intercept)"] + betas["grade2"],
+    class_type_K == "Regular class" & grade == "3" ~ betas["(Intercept)"] + betas["grade3"],
+    
+    # 小班 (Baseline + Small Class Effect)
+    class_type_K == "Small class" & grade == "K" ~ betas["(Intercept)"] + betas["class_type_KSmall class"],
+    class_type_K == "Small class" & grade == "1" ~ betas["(Intercept)"] + betas["class_type_KSmall class"] + betas["grade1"],
+    class_type_K == "Small class" & grade == "2" ~ betas["(Intercept)"] + betas["class_type_KSmall class"] + betas["grade2"],
+    class_type_K == "Small class" & grade == "3" ~ betas["(Intercept)"] + betas["class_type_KSmall class"] + betas["grade3"]
+  ))
 
-```{r}
-# 使用 lapply 对 20 个数据集分别计算倾向得分
-ps_list <- lapply(1:20, function(i) {
-  # 1. 提取第 i 个插补集
-  d <- complete(imp_data, i)
-  
-  # 2. 【核心修复】显式注入 stayed_g3 变量
-  # 确保是从含有该变量的原始宽表 stars1_wide 中获取
-  d <- d %>%
-    mutate(
-      stayed_g3 = stars1_wide$stayed_g3
-    )
-  
-  # 3. 拟合模型
-  fit <- glm(stayed_g3 ~ class_type_3 + student_race + student_gender + 
-             free_lunch_K + area_type_K, 
-             data = d, family = binomial)
-             
-  return(predict(fit, type = "response"))
-})
+# 加上种族和免费午餐的基准修正（因为我们pred_data设为了Non-Black和Non-free lunch）
+# 这步让分值回归到 Non-Black, Non-free lunch 学生的水平，更具代表性
+pred_data$predicted_score <- pred_data$predicted_score + betas["student_raceNon-Black"] + betas["free_lunch_KNon-free lunch"]
 ```
 
 ```{r}
 # ====================================================================
-# STEP 6: Outcome Model & DR Estimation (The Grand Finale)
+# STEP 9: 绘制纵向成长曲线图 (AIPW + Mixed Model 修正版)
 # ====================================================================
 
-# 1. 拟合结果模型 (Outcome Model)
-# 我们只在观测到 Y3 的样本上训练。
-# 变量选择：使用 MICE 填好的 100% 完整变量，确保“共轭性” (Congeniality)
-outcome_model <- lm(
-  math_score_3 ~ class_type_3 + student_race + student_gender + 
-                 free_lunch_3 + area_type_3 + teacher_degree_3, 
-  data = subset(stars_dr_prepared, stayed_g3 == 1)
-)
-
-# 2. 生成预测值 m_hat (针对全体样本)
-# 因为自变量在第四步后都是完整的，所以这里不会产生任何新的 NA
-stars_dr_prepared$m_hat <- predict(outcome_model, newdata = stars_dr_prepared)
-
-# 3. 执行 AIPW (Doubly Robust) 计算公式
-# 根据 Seaman (2018)，公式为：E[m_hat + R/pi_hat * (Y - m_hat)]
-stars_dr_final <- stars_dr_prepared %>%
-  mutate(
-    # 计算误差修正项：如果是缺失值(R=0)，修正项为 0；如果是观测值(R=1)，进行逆概率加权
-    dr_correction = ifelse(stayed_g3 == 1, 
-                           (1 / pi_hat) * (math_score_3 - m_hat), 
-                           0),
-    # 每一位学生的 DR 贡献值
-    dr_pseudo_outcome = m_hat + dr_correction
-  )
-
-# 4. 汇总结果：得到全校范围内的无偏均值估计
-final_summary <- stars_dr_final %>%
-  summarize(
-    DR_Mean = mean(dr_pseudo_outcome),
-    Observed_Mean = mean(math_score_3, na.rm = TRUE),
-    Sample_Size = n()
-  )
-
-# --- 快速检查 ---
-cat("检查点 4: 最终 DR 估计 vs 原始观测均值\n")
-print(final_summary)
-```
-```{r}
-# 对比原始分布和 DR 修正后的均值分布
-ggplot(stars_dr_final) +
-  geom_density(aes(x = math_score_3, fill = "Observed"), alpha = 0.3) +
-  geom_density(aes(x = dr_pseudo_outcome, fill = "DR Adjusted"), alpha = 0.3) +
-  labs(title = "Effect of DR Adjustment on Math Score Distribution",
-       x = "Year 3 Math Score", fill = "Method")
-```
-
-```{r}
-# ====================================================================
-# 修正后的 20 次循环 DR (AIPW) 计算逻辑
-# ====================================================================
-
-m <- imp_data$m  # 20 次插补
-dr_estimates <- sapply(1:m, function(i) {
+ggplot(pred_data, aes(x = grade, y = predicted_score, group = class_type_K, color = class_type_K)) +
+  # 绘制折线
+  geom_line(size = 1.2) +
+  # 绘制数据点
+  geom_point(size = 4, shape = 21, fill = "white") +
   
-  # 1. 提取第 i 个插补集
-  d <- complete(imp_data, i)
+  # 设置坐标轴标签和标题
+  labs(
+    title = "K-3年级数学成绩成长轨迹：小班与常规班对比",
+    subtitle = "基于多重插补、AIPW双重稳健估计与纵向混合效应模型",
+    x = "年级 (Grade)",
+    y = "AIPW修正后预测数学成绩",
+    color = "班级类型 (Kindergarten)"
+  ) +
   
-  # 2. 【核心修复】重新注入流失指标和 ID
-  # 确保是从含有该变量的原始宽表 stars1_wide 中获取
-  d$stayed_g3 <- stars1_wide$stayed_g3
-  d$student_id <- stars1_wide$student_id
+  # 美化主题
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 11, color = "gray30"),
+    axis.title = element_text(face = "bold", size = 12),
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  ) +
   
-  # 3. 拟合缺失模型 (PS Model) 以获取该数据集下的 pi_hat
-  # 注意：在 20 个不同数据集中，pi_hat 会有细微差别，这正是 MI 的意义
-  ps_fit <- glm(stayed_g3 ~ student_race + student_gender + free_lunch_K + area_type_K, 
-                data = d, family = binomial)
-  pi_hat <- predict(ps_fit, type = "response")
+  # 设置颜色
+  scale_color_manual(values = c("Regular class" = "#E41A1C", "Small class" = "#377EB8")) +
   
-  # 4. 拟合结果模型 (Outcome Model) 
-  # 只在观测到三年级成绩的学生中训练
-  out_fit <- lm(math_score_3 ~ class_type_3 + student_race + student_gender + 
-                free_lunch_3 + area_type_3 + teacher_degree_3, 
-                data = subset(d, stayed_g3 == 1))
-  
-  # 5. 生成对全体样本的预测值 m_hat
-  m_hat <- predict(out_fit, newdata = d)
-  
-  # 6. 计算 AIPW (Double Robust) 估计量
-  # 我们需要原始的有 NA 的成绩
-  y_obs <- stars1_wide$math_score_3
-  r_ind <- d$stayed_g3
-  
-  # AIPW 公式实现：E[m_hat + R/pi_hat * (Y - m_hat)]
-  # replace_na 用于处理 R=0 时的计算，因为 R=0 时修正项会被乘 0，所以填什么不重要
-  dr_pseudo_val <- m_hat + (r_ind / pi_hat) * (ifelse(is.na(y_obs), 0, y_obs) - m_hat)
-  
-  # 返回该平行世界的平均均值
-  return(mean(dr_pseudo_val))
-})
-
-# 最终经过 20 次汇总后的 DR 均值
-final_dr_mean <- mean(dr_estimates)
-
-# 计算插补间方差以评估不确定性
-dr_se <- sd(dr_estimates) / sqrt(m)
-
-cat("最终 20 次汇总后的 DR 估计均值:", final_dr_mean, "\n")
-```
-
-```{r}
-# ====================================================================
-# STEP 7: 最终因果效应评估 (Causal Effect via DR)
-# ====================================================================
-
-# 1. 对比不同班级类型在 DR 修正后的得分
-final_effect <- stars_dr_final %>%
-  group_by(class_type_3) %>%
-  summarize(
-    DR_Adjusted_Mean = mean(dr_pseudo_outcome),
-    Observed_Mean = mean(math_score_3, na.rm = TRUE),
-    # 偏差修正量：负值表示该组流失了较多差生
-    Bias_Correction = DR_Adjusted_Mean - Observed_Mean 
-  )
-
-# 正确的替代方案：衡量班级类型对三年级成绩的影响，同时控制背景
-final_model <- lm(dr_pseudo_outcome ~ class_type_3 + student_race + free_lunch_3, 
-                  data = stars_dr_final)
-
-summary(final_model)
-```
-
-```{r}
-# ====================================================================
-# STEP 7: 构建用于 ANOVA 的长表 (集成 DR 修正值)
-# ====================================================================
-
-# 1. 提取 K, 1, 2 年级的原始观测数据 (以及背景协变量)
-stars_long_base <- stars1_wide %>%
-  select(student_id, 
-         # 选择我们要分析的成绩和班级类型
-         math_score_K, math_score_1, math_score_2,
-         class_type_K, class_type_1, class_type_2) %>%
-  pivot_longer(
-    cols = -student_id,
-    # 正则表达式：(变量名)_(年级后缀)
-    names_pattern = "(.*)_(K|1|2)", 
-    names_to = c(".value", "grade_label")
-  ) %>%
-  mutate(grade = case_when(
-    grade_label == "K" ~ "Grade 0",
-    grade_label == "1" ~ "Grade 1",
-    grade_label == "2" ~ "Grade 2"
-  )) %>%
-  select(-grade_label)
-
-# 2. 准备 Year 3 的 DR 修正数据
-# 注意：列名必须与上面的 math_score 和 class_type 完全一致
-stars_g3_dr <- stars_dr_final %>%
-  select(student_id, class_type_3, dr_pseudo_outcome) %>%
-  rename(math_score = dr_pseudo_outcome, 
-         class_type = class_type_3) %>%
-  mutate(grade = "Grade 3")
-
-# 3. 合并
-stars_long_final <- bind_rows(stars_long_base, stars_g3_dr) %>%
-  mutate(
-    grade = factor(grade, levels = c("Grade 0", "Grade 1", "Grade 2", "Grade 3")),
-    class_type = factor(class_type)
-  ) %>%
-  # 剔除那些在特定年级没有班级记录的学生行（可选）
-  filter(!is.na(class_type))
-
-# --- 验证数据结构 ---
-cat("检查点 6: 最终长表结构\n")
-str(stars_long_final)
-# 预期：11601 * 4 = 46404 行左右，列只有 student_id, math_score, class_type, grade
-```
-
-```{r}
-# 重新整合长表，确保每个 student_id 都有 4 行
-stars_long_final <- stars_long_final %>%
-  # 这一步会自动补齐缺失的年级行
-  complete(student_id, grade) %>%
-  # 关键：我们需要把 class_type 补齐，因为 ANOVA 不允许自变量缺失
-  group_by(student_id) %>%
-  fill(class_type, .direction = "downup") %>%
-  ungroup()
-
-# 再次检查行数
-cat("修正后行数:", nrow(stars_long_final), "(预期应接近 46404)\n")
-```
-
-```{r}
-# 运行 ANOVA
-# math_score 是包含 DR 修正值的混合得分
-# class_type 是班级类型
-# grade 是年级（0-3）
-model_anova <- aov(math_score ~ class_type * grade, data = stars_long_final)
-
-cat("\n--- 最终双因素方差分析结果 ---\n")
-summary(model_anova)
-
-# 进一步查看交互作用的具体表现 (Post-hoc)
-cat("\n--- 交互效应各组均值 ---\n")
-print(model.tables(model_anova, "means"))
-```
-
-```{r}
-# 运行 Tukey 事后检验，重点看各个年级下 class_type 的两两对比
-TukeyHSD(model_anova, which = "class_type:grade")
-```
-
-```{r}
-# 定义三种不同复杂度的结果模型
-specs <- list(
-  "Minimal"  = math_score_3 ~ class_type_3 + student_race,
-  "Standard" = math_score_3 ~ class_type_3 + student_race + free_lunch_3 + student_gender,
-  "Full"     = math_score_3 ~ class_type_3 + student_race + free_lunch_3 + student_gender + 
-                               area_type_3 + teacher_degree_3
-)
-
-# 循环计算不同模型下的 DR Mean
-sensitivity_results <- lapply(specs, function(formula) {
-  m <- lm(formula, data = subset(stars_dr_prepared, stayed_g3 == 1))
-  m_hat <- predict(m, newdata = stars_dr_prepared)
-  # 使用之前算好的 pi_hat
-  dr_pseudo <- m_hat + ifelse(stars_dr_prepared$stayed_g3 == 1, 
-                              (1/stars_dr_prepared$pi_hat)*(stars_dr_prepared$math_score_3 - m_hat), 0)
-  mean(dr_pseudo)
-})
-
-print(unlist(sensitivity_results))
-
-```
-
-```{r}
-# 对权重进行修剪 (Trimming)
-stars_dr_final <- stars_dr_final %>%
-  mutate(weight = 1/pi_hat,
-         # 将极端的权重限制在 5% 到 95% 分位数之间
-         trimmed_weight = pmin(pmax(weight, quantile(weight, 0.05)), quantile(weight, 0.95)))
-
-# 计算修剪后的均值
-trimmed_mean <- mean(stars_dr_final$m_hat + 
-                     ifelse(stars_dr_final$stayed_g3 == 1, 
-                            stars_dr_final$trimmed_weight * (stars_dr_final$math_score_3 - stars_dr_final$m_hat), 0))
-
-cat("原始 DR 均值:", 616.41, "\n权重修剪后均值:", trimmed_mean)
-```
-
-```{r}
-# 模拟：假设流失学生的真实成绩比模型预测的还要低 delta 分
-deltas <- seq(0, 20, by = 5) # 假设低 0 到 20 分
-impact_on_ate <- sapply(deltas, function(d) {
-  # 对 R=0 的人减去 delta
-  adjusted_pseudo = stars_dr_final$dr_pseudo_outcome
-  adjusted_pseudo[stars_dr_final$stayed_g3 == 0] <- adjusted_pseudo[stars_dr_final$stayed_g3 == 0] - d
-  
-  # 重新运行模型看 class_typeSmall 的系数
-  coef(lm(adjusted_pseudo ~ class_type_3, data = stars_dr_final))["class_type_3Small class"]
-})
-
-names(impact_on_ate) <- deltas
-print(impact_on_ate)
-
-```
-
-```{r}
-# ====================================================================
-# 完整方案：20个插补集循环处理、DR计算与ANOVA汇总
-# ====================================================================
-library(mice)
-library(dplyr)
-library(tidyr)
-
-m <- imp_data$m  # 自动获取插补次数，通常为 20
-anova_models_list <- list()
-
-for (i in 1:m) {
-  # 1. 提取第 i 个插补集并注入必要变量
-  d <- complete(imp_data, i)
-  d$stayed_g3 <- stars1_wide$stayed_g3
-  d$student_id <- stars1_wide$student_id
-  
-  # 2. 拟合缺失模型 (Propensity Score Model)
-  # 使用当前数据集的完整协变量预测留存概率
-  ps_fit <- glm(stayed_g3 ~ student_race + student_gender + birth_year + 
-                free_lunch_K + area_type_K, 
-                data = d, family = binomial)
-  d$pi_hat <- predict(ps_fit, type = "response")
-  
-  # 3. 拟合结果模型 (Outcome Model)
-  # 仅在观测到三年级成绩的学生中训练
-  out_fit <- lm(math_score_3 ~ class_type_3 + student_race + student_gender + 
-                free_lunch_3 + area_type_3 + teacher_degree_3, 
-                data = subset(d, stayed_g3 == 1))
-  d$m_hat <- predict(out_fit, newdata = d)
-  
-  # 4. 计算 AIPW Pseudo-outcome (dr_pseudo_val)
-  # 公式：E[m_hat + R/pi_hat * (Y - m_hat)]
-  y_obs <- stars1_wide$math_score_3
-  r_ind <- d$stayed_g3
-  
-  # 计算每一位学生的 DR 贡献值（处理缺失值的关键步骤）
-  d$dr_pseudo_val <- d$m_hat + (r_ind / d$pi_hat) * (ifelse(is.na(y_obs), 0, y_obs) - d$m_hat)
-  
-  # 5. 构建 ANOVA 所需的长表
-  # A. K-2 年级原始观测数据
-  base_long <- stars1_wide %>%
-    select(student_id, math_score_K, math_score_1, math_score_2, 
-           class_type_K, class_type_1, class_type_2) %>%
-    pivot_longer(cols = -student_id, 
-                 names_pattern = "(.*)_(K|1|2)", 
-                 names_to = c(".value", "grade_label")) %>%
-    mutate(grade = case_when(
-      grade_label == "K" ~ "Grade 0",
-      grade_label == "1" ~ "Grade 1",
-      grade_label == "2" ~ "Grade 2"
-    )) %>%
-    select(-grade_label)
-  
-  # B. Grade 3 DR 修正数据 (来自当前插补集 d)
-  g3_dr <- d %>%
-    select(student_id, class_type_3, dr_pseudo_val) %>%
-    rename(math_score = dr_pseudo_val, 
-           class_type = class_type_3) %>%
-    mutate(grade = "Grade 3")
-  
-  # C. 合并并补齐 class_type (确保 longitudinal 结构完整)
-  current_long <- bind_rows(base_long, g3_dr) %>%
-    mutate(grade = factor(grade, levels = c("Grade 0", "Grade 1", "Grade 2", "Grade 3"))) %>%
-    group_by(student_id) %>%
-    fill(class_type, .direction = "downup") %>%
-    ungroup() %>%
-    filter(!is.na(class_type))
-  
-  # 6. 拟合当前平行世界的线性模型
-  # 我们使用 lm 以便后续通过 pool() 进行 Rubin's Rules 汇总
-  anova_models_list[[i]] <- lm(math_score ~ class_type * grade, data = current_long)
-}
-
-# 7. 汇总 20 个世界的结果 (Rubin's Rules)
-mira_anova <- as.mira(anova_models_list)
-pooled_anova <- pool(mira_anova)
-
-# --- 最终输出 ---
-cat("\n--- 20次插补汇总后的双因素分析结果 ---\n")
-print(summary(pooled_anova, conf.int = TRUE))
-```
-
-```{r}
-# 准备绘图数据（来自你的 Tukey HSD 结果）
-effect_data <- data.frame(
-  Grade = c("Kindergarten", "Grade 1", "Grade 2", "Grade 3 (DR)"),
-  Estimate = c(7.94, 11.36, 8.40, 7.54),
-  Lower = c(3.76, 7.35, 4.27, 4.63),
-  Upper = c(12.11, 15.36, 12.53, 10.44)
-)
-
-ggplot(effect_data, aes(x = Grade, y = Estimate)) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  geom_point(size = 4, color = "#2c3e50") +
-  geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.2, size = 1, color = "#2c3e50") +
-  labs(title = "Causal Effect of Small Class Size Across Grades",
-       subtitle = "Grade 3 effect is Doubly Robust adjusted",
-       y = "Score Advantage (Small vs. Regular)", x = "") +
-  theme_minimal()
-```
-
-Using the density plot provided by mice, it will draw the original data (blue) and 20 imputed versions (thin red lines).
-
-```{r}
-# 展示所有 20 个插补版本的分布，红色细线越多且越集中，说明插补越稳定
-densityplot(imp_data, ~ math_score_3, 
-            main = "Distribution Across 20 Imputations",
-            xlab = "Math Score (Grade 3)")
-```
-
-Extract the summarized means and confidence intervals from pooled_anova.
-
-```{r}
-# 1. 从汇总模型中提取效应量
-eff_summary <- summary(pooled_anova, conf.int = TRUE)
-
-# 2. 筛选出我们要展示的项 (例如各个年级下小班的效应)
-# 这里手动构建绘图数据，数据来源于 summary(pooled_anova)
-plot_data <- data.frame(
-  Grade = c("K", "G1", "G2", "G3 (DR)"),
-  Estimate = c(7.94, 11.36, 8.40, 7.54), # 这些值需替换为汇总后的 summary 结果
-  StdErr = c(2.10, 2.05, 2.15, 1.85)     # 替换为 summary 里的 std.error
-)
-
-# 3. 绘制带有汇总误差棒的 Forest Plot
-ggplot(plot_data, aes(x = Grade, y = Estimate)) +
-  geom_point(size = 4, color = "darkblue") +
-  geom_errorbar(aes(ymin = Estimate - 1.96*StdErr, ymax = Estimate + 1.96*StdErr), 
-                width = 0.2, color = "darkblue") +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  labs(title = "Pooled Causal Effect of Small Class (m=20)",
-       subtitle = "Error bars represent 95% CI including between-imputation variance",
-       y = "Score Advantage", x = "Grade Level") +
-  theme_minimal()
-```
-
-To demonstrate the robustness of IPW, plot the overlapping distribution of propensity scores in 20 parallel worlds.
-
-```{r}
-# 假设 ps_list 存储了 20 组概率
-ps_df <- data.frame(ps = unlist(ps_list), 
-                    imp = rep(1:20, each = length(ps_list[[1]])))
-
-ggplot(ps_df, aes(x = ps, group = imp)) +
-  geom_density(color = "red", alpha = 0.1) +
-  labs(title = "Propensity Score Overlap across 20 Imputations",
-       x = "Estimated Pr(Stayed in G3)", y = "Density") +
-  theme_light()
+  # 添加分值标签 (可选，让数值更清晰)
+  geom_text(aes(label = round(predicted_score, 1)), vjust = -1.5, size = 3.5, show.legend = FALSE)
 ```

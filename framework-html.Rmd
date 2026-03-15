@@ -757,6 +757,158 @@ We examined the auxiliary variables including reading score (treads), word skill
 
 # Inferential Analysis
 
+## Stage 1: Multilevel Multiple Imputation (MMI)
+
+This report continues from the EDA section and now implements the formal causal inference pipeline for Project STAR data. The first stage constructs a multilevel multiple imputation model for students nested within schools, using the `mice` package.
+
+```{r infer-stage1}
+# Prepare baseline variables and hierarchical structure
+stars1_long <- stars1 %>%
+  arrange(student_id, grade) %>%
+  mutate(
+    class_type = factor(class_type, levels = c("Regular class", "Small class")),
+    student_race = factor(student_race),
+    free_lunch = factor(free_lunch),
+    area_type = factor(area_type)
+  )
+
+stars1_wide <- stars1_long %>%
+  pivot_wider(
+    id_cols = c(student_id, school_id),
+    names_from = grade,
+    values_from = c(math_score, class_type, free_lunch, student_race, area_type),
+    names_glue = "{.value}_{grade}"
+  )
+
+stars_mice_input <- stars1_wide %>%
+  select(-student_id, -school_id) %>%
+  mutate(across(starts_with("class_type"), as.factor),
+         across(starts_with("free_lunch"), as.factor),
+         across(starts_with("area_type"), as.factor),
+         across(starts_with("student_race"), as.factor))
+
+ini <- mice(stars_mice_input, maxit = 0, printFlag = FALSE)
+pred <- quickpred(stars_mice_input, mincor = 0.15)
+imp_data <- mice(stars_mice_input, m = 20, method = 'pmm', predictorMatrix = pred, seed = 2026)
+
+cat('Stage 1 complete: ', imp_data$m, 'imputed datasets generated.\n')
+```
+
+## Stage 2: Doubly Robust (DR) Estimation
+
+Stage 2 constructs AIPW estimates per imputed dataset. For each dataset, we estimate the propensity model for small class assignment and the outcome model for math score. We then compute the DR-adjusted outcome.
+
+```{r infer-stage2}
+models_dr <- vector('list', m)
+failed_idx <- integer(0)
+
+for (i in 1:m) {
+  data_i <- complete(imp_data, i)
+
+  # Propensity score for small class assignment at kindergarten
+  data_i$class_type_K <- ifelse(data_i$class_type_K == 'Small class', 1, 0)
+  ps_fit <- glm(class_type_K ~ student_race_K + free_lunch_K + area_type_K + factor(school_id_K),
+                data = data_i, family = binomial())
+  data_i$pi_hat <- predict(ps_fit, type = 'response')
+
+  # Outcome model for K-grade math score
+  out_fit <- lm(math_score_K ~ class_type_K + student_race_K + free_lunch_K + area_type_K + factor(school_id_K),
+                data = data_i)
+  data_i$m_hat <- predict(out_fit, newdata = data_i)
+
+  data_i$dr_score_K <- with(data_i, class_type_K * math_score_K / pi_hat - (class_type_K - pi_hat) / pi_hat * m_hat)
+  models_dr[[i]] <- list(ps = ps_fit, out = out_fit, dr = data_i$dr_score_K)
+}
+
+cat('Stage 2 complete: processed', m, 'imputed datasets.\n')
+```
+
+## Stage 3: Randomized Mixed-Effects Model and Pooling
+
+Stage 3 fits a longitudinal mixed-effects model to the DR-transformed outcome across all grades and then pools the estimates using Rubin's rules.
+
+```{r infer-stage3}
+lmer_models <- vector('list', m)
+failed_idx <- integer(0)
+
+for (i in 1:m) {
+  data_i <- complete(imp_data, i)
+  data_i$dr_math_K <- models_dr[[i]]$dr
+
+  long_i <- data_i %>%
+    pivot_longer(cols = starts_with('dr_math_'),
+                 names_to = 'grade', names_pattern = 'dr_math_(.*)',
+                 values_to = 'dr_outcome') %>%
+    mutate(grade = factor(grade, levels = c('K', '1', '2', '3')))
+
+  fit_i <- tryCatch(
+    lmer(dr_outcome ~ class_type_K + student_race_K + free_lunch_K + grade + (1 | school_id_K),
+         data = long_i),
+    error = function(e) e
+  )
+
+  if (inherits(fit_i, 'error')) {
+    failed_idx <- c(failed_idx, i)
+  } else {
+    lmer_models[[i]] <- fit_i
+  }
+}
+
+if (length(failed_idx) > 0) stop('Stage 3 model failures: ', paste(failed_idx, collapse = ', '))
+
+mira_obj <- as.mira(lmer_models)
+final_pooled_dr <- pool(mira_obj)
+pooled_summary <- summary(final_pooled_dr, conf.int = TRUE)
+print(pooled_summary)
+```
+
+### Inference interpretation
+
+- The key coefficient is `class_type_KSmall class` for the average treatment effect of small classes.
+- We also interpret grade effects, race and free-lunch control coefficients.
+- Significance is evaluated with p-values and 95% confidence intervals.
+
+## Visualization
+
+```{r infer-stage3-plot, fig.width=7, fig.height=5}
+pred_data <- expand.grid(
+  class_type_K = c('Regular class', 'Small class'),
+  grade = factor(c('K','1','2','3'), levels = c('K','1','2','3')),
+  student_race_K = 'Non-Black',
+  free_lunch_K = 'Non-free lunch'
+)
+
+betas <- pooled_summary$estimate
+names(betas) <- pooled_summary$term
+
+pred_data <- pred_data %>%
+  mutate(predicted = case_when(
+    class_type_K == 'Regular class' & grade == 'K' ~ betas['(Intercept)'],
+    class_type_K == 'Regular class' & grade == '1' ~ betas['(Intercept)'] + betas['grade1'],
+    class_type_K == 'Regular class' & grade == '2' ~ betas['(Intercept)'] + betas['grade2'],
+    class_type_K == 'Regular class' & grade == '3' ~ betas['(Intercept)'] + betas['grade3'],
+    class_type_K == 'Small class' & grade == 'K' ~ betas['(Intercept)'] + betas['class_type_KSmall class'],
+    class_type_K == 'Small class' & grade == '1' ~ betas['(Intercept)'] + betas['class_type_KSmall class'] + betas['grade1'],
+    class_type_K == 'Small class' & grade == '2' ~ betas['(Intercept)'] + betas['class_type_KSmall class'] + betas['grade2'],
+    class_type_K == 'Small class' & grade == '3' ~ betas['(Intercept)'] + betas['class_type_KSmall class'] + betas['grade3'],
+    TRUE ~ NA_real_
+  ))
+
+# Add race and free lunch baseline adjustments if those terms are in the model
+if ('student_race_KNon-Black' %in% names(betas)) 
+  pred_data <- pred_data %>% mutate(predicted = predicted + betas['student_race_KNon-Black'])
+if ('free_lunch_KNon-free lunch' %in% names(betas)) 
+  pred_data <- pred_data %>% mutate(predicted = predicted + betas['free_lunch_KNon-free lunch'])
+
+
+ggplot(pred_data, aes(x = grade, y = predicted, group = class_type_K, color = class_type_K)) +
+  geom_line(size = 1.1) +
+  geom_point(size = 3) +
+  labs(title = 'Predicted DR-adjusted Math Score by Grade and Class Type',
+       x = 'Grade', y = 'Predicted Math Score', color = 'Class Type') +
+  theme_minimal()
+```
+
 # Sensitivity Analysis
 
 ## Comparison to Other Methods
