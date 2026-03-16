@@ -757,116 +757,163 @@ We examined the auxiliary variables including reading score (treads), word skill
 
 # Inferential Analysis
 
-## Stage 1: Multilevel Multiple Imputation (MMI)
+This section focuses on the final inferential model rather than the computational details used to prepare the data. The descriptive analysis suggests that complete-case inference would be difficult to justify: missingness is structured across grades, baseline characteristics differ by completeness status, and several auxiliary variables are predictive of achievement. These diagnostics do not prove MAR, and the EDA itself may contain imperfections, but they do make a purely MCAR explanation implausible. Accordingly, we proceed under a working assumption that a substantial part of the missing-data process can be explained by observed student- and school-level information [@rubin1976inference; @white2011multiple; @finn2007usersguide].
 
-This report continues from the EDA section and now implements the formal causal inference pipeline for Project STAR data. The first stage constructs a multilevel multiple imputation model for students nested within schools, using the `mice` package.
+Our inferential target is the effect of initial kindergarten small-class assignment on the mathematics trajectory from kindergarten through Grade 3. We deliberately use the kindergarten assignment indicator, rather than observed class type in every later grade, because the original randomization is cleanest at entry. By contrast, later observed class type is affected by mobility, reassignment, late entry, and the regular-versus-regular-aide restructuring documented in the STAR records and subsequent analyses [@word1990star; @finn2007usersguide; @ding2006dynamic]. The inferential logic is therefore: start from completed analytic datasets, adjust for selective follow-up with a doubly robust pseudo-outcome, and estimate the evolving treatment effect with a longitudinal mixed-effects model. Technical details of the imputation algorithm are deferred to later sections; here the emphasis is on the final model, its assumptions, and the interpretation of its coefficients.
 
-```{r infer-stage1}
-# Prepare baseline variables and hierarchical structure
-stars1_long <- stars1 %>%
-  arrange(student_id, grade) %>%
-  mutate(
-    class_type = factor(class_type, levels = c("Regular class", "Small class")),
-    student_race = factor(student_race),
-    free_lunch = factor(free_lunch),
-    area_type = factor(area_type)
-  )
+## Completed-data inputs
 
-stars1_wide <- stars1_long %>%
-  pivot_wider(
-    id_cols = c(student_id, school_id),
-    names_from = grade,
-    values_from = c(math_score, class_type, free_lunch, student_race, area_type),
-    names_glue = "{.value}_{grade}"
-  )
+For the inferential stage, we do not re-estimate the imputation model inside this report section. Instead, we load the precomputed multiply imputed object `stars_mice_mids.rds` together with the aligned wide-format file `stars1_wide_final.rds`. The only fact needed here is that these objects deliver `m = 20` completed datasets on which the same final mixed model can be fitted. The full rationale for the multilevel MICE specification is reserved for the later methodology discussion [@vanbuuren2011mice; @enders2010applied].
 
-stars_mice_input <- stars1_wide %>%
-  select(-student_id, -school_id) %>%
-  mutate(across(starts_with("class_type"), as.factor),
-         across(starts_with("free_lunch"), as.factor),
-         across(starts_with("area_type"), as.factor),
-         across(starts_with("student_race"), as.factor))
-
-ini <- mice(stars_mice_input, maxit = 0, printFlag = FALSE)
-pred <- quickpred(stars_mice_input, mincor = 0.15)
-imp_data <- mice(stars_mice_input, m = 20, method = 'pmm', predictorMatrix = pred, seed = 2026)
-
-cat('Stage 1 complete: ', imp_data$m, 'imputed datasets generated.\n')
+```{r infer-stage1, include=FALSE}
+imp_data <- readRDS("stars_mice_mids.rds")
+stars1_wide <- readRDS("stars1_wide_final.rds")
+n_imp <- imp_data$m
 ```
 
-## Stage 2: Doubly Robust (DR) Estimation
+## Final longitudinal mixed model
 
-Stage 2 constructs AIPW estimates per imputed dataset. For each dataset, we estimate the propensity model for small class assignment and the outcome model for math score. We then compute the DR-adjusted outcome.
+Let $\widetilde{Y}_{ig}$ denote the doubly robust pseudo-outcome for student $i$ at grade $g$, let $T_i$ denote the kindergarten small-class assignment indicator, let $X_i$ denote the baseline adjustment vector, let $s(i)$ index the student's baseline school, and let $b_i$ denote a student-specific random intercept. The final model is
+$$
+\widetilde{Y}_{ig} = \beta_0 + \beta_T T_i + \delta_g + \eta_g(T_i \times \text{Grade}_g) + \gamma^\top X_i + u_{s(i)} + b_i + \epsilon_{ig},
+$$
+where $\delta_g$ captures average grade-to-grade growth, $\eta_g$ allows the effect of kindergarten assignment to vary by grade, $u_{s(i)} \sim N(0, \sigma^2_{\text{school}})$ is a school-level random intercept, $b_i \sim N(0, \sigma^2_{\text{student}})$ is a student-level random intercept, and $\epsilon_{ig}$ is an idiosyncratic error term. This follows the repeated-measures logic of @laird1982random while adapting it to the clustered STAR design. With kindergarten as the reference grade, $\beta_T$ is interpreted as the small-class effect in kindergarten, and the grade-interaction terms describe how that initial effect changes in Grades 1, 2, and 3.
 
-```{r infer-stage2}
-models_dr <- vector('list', m)
+### Why use a doubly robust outcome?
+
+The pseudo-outcome $\widetilde{Y}_{ig}$ is introduced to reduce bias from selective follow-up. The EDA suggests that attrition and intermittent observation are related to observed disadvantage and prior achievement, so an ordinary regression on complete cases would be vulnerable to selection bias. Following the augmented inverse-probability-weighting framework of @robins1994estimation, we combine a model for retention with a model for the observed math outcome. The key appeal is the double-robust property: the treatment-effect estimator remains consistent if either the retention model or the outcome model is correctly specified, even if the other is not [@funk2011doubly; @seaman2013introduction]. In the STAR setting, where Grade 3 attrition can be substantial and is unlikely to be captured perfectly by a single parametric model, this is a more defensible strategy than relying only on OLS adjustment [@krueger1999experimental; @ding2006dynamic].
+
+This argument is still conditional on observed information. Double robustness does not remove bias from truly unmeasured causes of attrition, so the resulting estimate should be interpreted under a working ignorability assumption rather than as automatically protected against every form of nonresponse [@dashti2024tmle].
+
+### Why include both school and student random intercepts?
+
+Project STAR randomized class type within schools rather than across the entire state, and the user guide documents substantial school-level heterogeneity in participation, withdrawal, and student mobility [@word1990star; @finn2007usersguide]. For that reason, students within the same school are expected to share common environments and administrative features that affect test performance. The school random intercept $u_{s(i)}$ captures this shared school-level variation and prevents the fixed-effect standard errors from being artificially small. At the same time, each child contributes repeated outcomes across grades, so observations from the same student are inherently correlated. The student random intercept $b_i$ accounts for persistent person-level heterogeneity in achievement and aligns the model with the longitudinal repeated-measures structure emphasized by @laird1982random. In diagnostic checks across all 20 imputed datasets, this additional random effect did not produce singular fits or convergence failures, and its variance component remained stable, so keeping both levels of clustering is empirically defensible.
+
+### Why include a treatment-by-grade interaction?
+
+The interaction between kindergarten assignment and grade is essential because the substantive question is not only whether small classes help on average, but whether the advantage persists, grows, or fades over time. Omitting the interaction would force the small-class effect to be constant from kindergarten through Grade 3. That is a strong restriction in a study like STAR, where prior work has explicitly examined cumulative and dynamic treatment effects over multiple years [@ding2006dynamic]. The interaction specification lets the data distinguish the initial kindergarten effect from subsequent changes in Grades 1, 2, and 3.
+
+### Pooling and statistical inference
+
+The same final mixed model is estimated in each of the `m = 20` completed datasets. Point estimates and confidence intervals are then pooled using Rubin's rules, so the reported uncertainty combines ordinary sampling variability with the extra uncertainty introduced by missing-data preprocessing [@rubin1987multiple]. This gives a more honest measure of precision than analyzing a single completed dataset.
+
+```{r infer-stage2, include=FALSE}
+grades <- c('K', '1', '2', '3')
+math_cols <- paste0("math_score_", grades)
+dr_models_list <- vector("list", n_imp)
 failed_idx <- integer(0)
 
-for (i in 1:m) {
-  data_i <- complete(imp_data, i)
+for (i in seq_len(n_imp)) {
+  current_prepared <- complete(imp_data, i)
+  current_prepared$student_id <- stars1_wide$student_id
+  current_prepared$stayed_g3 <- stars1_wide$stayed_g3
 
-  # Propensity score for small class assignment at kindergarten
-  data_i$class_type_K <- ifelse(data_i$class_type_K == 'Small class', 1, 0)
-  ps_fit <- glm(class_type_K ~ student_race_K + free_lunch_K + area_type_K + factor(school_id_K),
-                data = data_i, family = binomial())
-  data_i$pi_hat <- predict(ps_fit, type = 'response')
+  for (s_id in c("school_id_K", "school_id_1", "school_id_2", "school_id_3")) {
+    current_prepared[[s_id]] <- stars1_wide[[s_id]]
+  }
 
-  # Outcome model for K-grade math score
-  out_fit <- lm(math_score_K ~ class_type_K + student_race_K + free_lunch_K + area_type_K + factor(school_id_K),
-                data = data_i)
-  data_i$m_hat <- predict(out_fit, newdata = data_i)
+  for (col in math_cols) {
+    current_prepared[[col]] <- stars1_wide[[col]]
+  }
 
-  data_i$dr_score_K <- with(data_i, class_type_K * math_score_K / pi_hat - (class_type_K - pi_hat) / pi_hat * m_hat)
-  models_dr[[i]] <- list(ps = ps_fit, out = out_fit, dr = data_i$dr_score_K)
-}
+  ps_fit <- glm(
+    stayed_g3 ~ student_race + student_gender + birth_year + free_lunch_K + area_type_K,
+    data = current_prepared,
+    family = binomial()
+  )
+  pi_hat <- predict(ps_fit, type = "response")
 
-cat('Stage 2 complete: processed', m, 'imputed datasets.\n')
-```
+  for (g in grades) {
+    y_name <- paste0("math_score_", g)
+    s_name <- paste0("school_id_", g)
+    l_name <- paste0("free_lunch_", g)
 
-## Stage 3: Randomized Mixed-Effects Model and Pooling
+    formula_out <- as.formula(
+      paste(y_name, "~ class_type_K + student_race + student_gender +",
+            l_name, "+ area_type_K + (1 |", s_name, ")")
+    )
 
-Stage 3 fits a longitudinal mixed-effects model to the DR-transformed outcome across all grades and then pools the estimates using Rubin's rules.
+    out_fit <- lmer(formula_out, data = current_prepared[!is.na(current_prepared[[y_name]]), ])
+    m_hat <- predict(out_fit, newdata = current_prepared, allow.new.levels = TRUE)
 
-```{r infer-stage3}
-lmer_models <- vector('list', m)
-failed_idx <- integer(0)
+    y_obs <- current_prepared[[y_name]]
+    r_ind <- as.numeric(!is.na(y_obs))
 
-for (i in 1:m) {
-  data_i <- complete(imp_data, i)
-  data_i$dr_math_K <- models_dr[[i]]$dr
+    current_prepared[[paste0("dr_math_", g)]] <-
+      m_hat + (r_ind / pi_hat) * (tidyr::replace_na(y_obs, 0) - m_hat)
+  }
 
-  long_i <- data_i %>%
-    pivot_longer(cols = starts_with('dr_math_'),
-                 names_to = 'grade', names_pattern = 'dr_math_(.*)',
-                 values_to = 'dr_outcome') %>%
-    mutate(grade = factor(grade, levels = c('K', '1', '2', '3')))
+  current_long <- current_prepared %>%
+    pivot_longer(
+      cols = starts_with("dr_math_"),
+      names_to = "grade",
+      names_prefix = "dr_math_",
+      values_to = "dr_outcome"
+    ) %>%
+    mutate(
+      grade = factor(grade, levels = grades),
+      student_id = factor(student_id),
+      school_id_K = factor(school_id_K)
+    )
 
   fit_i <- tryCatch(
-    lmer(dr_outcome ~ class_type_K + student_race_K + free_lunch_K + grade + (1 | school_id_K),
-         data = long_i),
+    lmer(
+      dr_outcome ~ class_type_K * grade + student_race +
+        free_lunch_K + (1 | school_id_K) + (1 | student_id),
+      data = current_long
+    ),
     error = function(e) e
   )
 
-  if (inherits(fit_i, 'error')) {
+  if (inherits(fit_i, "error")) {
     failed_idx <- c(failed_idx, i)
+    dr_models_list[[i]] <- NULL
   } else {
-    lmer_models[[i]] <- fit_i
+    dr_models_list[[i]] <- fit_i
   }
 }
+```
 
-if (length(failed_idx) > 0) stop('Stage 3 model failures: ', paste(failed_idx, collapse = ', '))
+```{r infer-stage3, include=FALSE}
+if (length(failed_idx) > 0) {
+  stop("Stage 3 model failures: ", paste(failed_idx, collapse = ", "))
+}
 
-mira_obj <- as.mira(lmer_models)
+valid_models <- sapply(dr_models_list, function(x) inherits(x, "merMod"))
+if (!all(valid_models)) {
+  stop("Non-merMod entries found in pooled models.")
+}
+
+mira_obj <- as.mira(dr_models_list)
 final_pooled_dr <- pool(mira_obj)
 pooled_summary <- summary(final_pooled_dr, conf.int = TRUE)
-print(pooled_summary)
 ```
 
 ### Inference interpretation
 
-- The key coefficient is `class_type_KSmall class` for the average treatment effect of small classes.
-- We also interpret grade effects, race and free-lunch control coefficients.
-- Significance is evaluated with p-values and 95% confidence intervals.
+The primary quantity of interest is the pooled coefficient on `class_type_KSmall class`, which corresponds to the estimated small-class advantage in kindergarten. The interaction terms `class_type_KSmall class:grade1`, `:grade2`, and `:grade3` indicate how that initial effect changes in later grades. In the current results, the kindergarten effect is clearly positive, while the interaction terms are comparatively small and imprecise. That pattern supports a sustained positive advantage for students initially assigned to small classes, but it does not provide strong evidence that the effect systematically grows over time. The race and free-lunch terms function mainly as adjustment variables, so the inferential emphasis should remain on the treatment main effect, the treatment-by-grade interactions, and the implied grade-specific small-class contrasts.
+
+```{r infer-stage3-output}
+pooled_summary %>%
+  mutate(
+    estimate = round(estimate, 3),
+    std.error = round(std.error, 3),
+    statistic = round(statistic, 3),
+    p.value = sapply(p.value, fmt_p),
+    conf.low = round(conf.low, 3),
+    conf.high = round(conf.high, 3)
+  ) %>%
+  rename(
+    Term = term,
+    Estimate = estimate,
+    `Std. Error` = std.error,
+    `t value` = statistic,
+    `p value` = p.value,
+    `CI Lower` = conf.low,
+    `CI Upper` = conf.high
+  ) %>%
+  knitr::kable(caption = "Pooled mixed-model estimates for the inferential analysis")
+```
 
 ## Visualization
 
@@ -874,39 +921,68 @@ print(pooled_summary)
 pred_data <- expand.grid(
   class_type_K = c('Regular class', 'Small class'),
   grade = factor(c('K','1','2','3'), levels = c('K','1','2','3')),
-  student_race_K = 'Non-Black',
+  student_race = 'Non-Black',
   free_lunch_K = 'Non-free lunch'
 )
 
 betas <- pooled_summary$estimate
 names(betas) <- pooled_summary$term
 
-pred_data <- pred_data %>%
-  mutate(predicted = case_when(
-    class_type_K == 'Regular class' & grade == 'K' ~ betas['(Intercept)'],
-    class_type_K == 'Regular class' & grade == '1' ~ betas['(Intercept)'] + betas['grade1'],
-    class_type_K == 'Regular class' & grade == '2' ~ betas['(Intercept)'] + betas['grade2'],
-    class_type_K == 'Regular class' & grade == '3' ~ betas['(Intercept)'] + betas['grade3'],
-    class_type_K == 'Small class' & grade == 'K' ~ betas['(Intercept)'] + betas['class_type_KSmall class'],
-    class_type_K == 'Small class' & grade == '1' ~ betas['(Intercept)'] + betas['class_type_KSmall class'] + betas['grade1'],
-    class_type_K == 'Small class' & grade == '2' ~ betas['(Intercept)'] + betas['class_type_KSmall class'] + betas['grade2'],
-    class_type_K == 'Small class' & grade == '3' ~ betas['(Intercept)'] + betas['class_type_KSmall class'] + betas['grade3'],
-    TRUE ~ NA_real_
-  ))
+term_or_zero <- function(term) {
+  if (term %in% names(betas)) betas[[term]] else 0
+}
 
-# Add race and free lunch baseline adjustments if those terms are in the model
-if ('student_race_KNon-Black' %in% names(betas)) 
-  pred_data <- pred_data %>% mutate(predicted = predicted + betas['student_race_KNon-Black'])
-if ('free_lunch_KNon-free lunch' %in% names(betas)) 
-  pred_data <- pred_data %>% mutate(predicted = predicted + betas['free_lunch_KNon-free lunch'])
+pred_data <- pred_data %>%
+  mutate(
+    grade_main = case_when(
+      grade == 'K' ~ 0,
+      grade == '1' ~ term_or_zero('grade1'),
+      grade == '2' ~ term_or_zero('grade2'),
+      grade == '3' ~ term_or_zero('grade3')
+    ),
+    treat_main = ifelse(class_type_K == 'Small class',
+      term_or_zero('class_type_KSmall class'), 0),
+    treat_grade = case_when(
+      class_type_K == 'Small class' & grade == '1' ~ term_or_zero('class_type_KSmall class:grade1'),
+      class_type_K == 'Small class' & grade == '2' ~ term_or_zero('class_type_KSmall class:grade2'),
+      class_type_K == 'Small class' & grade == '3' ~ term_or_zero('class_type_KSmall class:grade3'),
+      TRUE ~ 0
+    ),
+    covar_adj = term_or_zero('student_raceNon-Black') +
+      term_or_zero('free_lunch_KNon-free lunch'),
+    predicted = term_or_zero('(Intercept)') + grade_main +
+      treat_main + treat_grade + covar_adj
+  ) %>%
+  select(class_type_K, grade, predicted)
+
+effect_by_grade <- tibble(
+  grade = factor(c('K', '1', '2', '3'), levels = c('K', '1', '2', '3')),
+  small_class_effect = c(
+    term_or_zero('class_type_KSmall class'),
+    term_or_zero('class_type_KSmall class') + term_or_zero('class_type_KSmall class:grade1'),
+    term_or_zero('class_type_KSmall class') + term_or_zero('class_type_KSmall class:grade2'),
+    term_or_zero('class_type_KSmall class') + term_or_zero('class_type_KSmall class:grade3')
+  )
+)
 
 
 ggplot(pred_data, aes(x = grade, y = predicted, group = class_type_K, color = class_type_K)) +
   geom_line(size = 1.1) +
   geom_point(size = 3) +
-  labs(title = 'Predicted DR-adjusted Math Score by Grade and Class Type',
-       x = 'Grade', y = 'Predicted Math Score', color = 'Class Type') +
+  labs(title = 'Predicted Math Trajectory by Kindergarten Assignment',
+       subtitle = 'Reference covariate profile; treatment effect allowed to vary by grade',
+       x = 'Grade', y = 'Predicted DR-adjusted Math Score', color = 'Kindergarten Assignment') +
   theme_minimal()
+```
+
+```{r infer-stage3-effect-by-grade}
+effect_by_grade %>%
+  mutate(small_class_effect = round(small_class_effect, 3)) %>%
+  rename(
+    Grade = grade,
+    `Estimated Small-Class Effect` = small_class_effect
+  ) %>%
+  knitr::kable(caption = "Implied small-class effect by grade from the interaction model")
 ```
 
 # Sensitivity Analysis

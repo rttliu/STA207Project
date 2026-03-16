@@ -40,8 +40,8 @@ m <- imp_data$m
 math_cols <- c("math_score_K", "math_score_1", "math_score_2", "math_score_3")
 # 我们需要存储的是转换后的长表数据集，或者直接存储模型
 # 预分配列表长度，避免未定义条目
- dr_models_list <- vector("list", m)
- failed_idx <- integer(0)
+dr_models_list <- vector("list", m)
+failed_idx <- integer(0)
 
 cat("开始在 20 个插补集上运行 Stage 2 (AIPW) & Stage 3 (Longitudinal Mixed Model)...\n")
 
@@ -100,16 +100,19 @@ for (i in 1:m) {
       names_prefix = "dr_math_",
       values_to = "dr_outcome"
     ) %>%
-    mutate(grade = factor(grade, levels = c("K", "1", "2", "3")))
+    mutate(
+      grade = factor(grade, levels = c("K", "1", "2", "3")),
+      student_id = factor(student_id),
+      school_id_K = factor(school_id_K)
+    )
 
   # 6. 【Stage 3: Randomized Mixed-Effects Model】
-  # 拟合公式 (3): 包含班级效应、协变量、时间(Grade)和学校随机截距
+  # 拟合公式 (3): 初始班级分配、年级交互、学校/学生随机截距
   fit_i <- tryCatch(
-    lmer(dr_outcome ~ class_type_K + student_race + 
-         free_lunch_K + grade + (1 | school_id_K), 
+    lmer(dr_outcome ~ class_type_K * grade + student_race + 
+         free_lunch_K + (1 | school_id_K) + (1 | student_id), 
          data = current_long),
-    error = function(e) e,
-    warning = function(w) w
+    error = function(e) e
   )
 
   if (inherits(fit_i, "error")) {
@@ -139,9 +142,10 @@ if (!all(valid_models)) {
 
 mira_obj <- as.mira(dr_models_list)
 final_pooled_dr <- pool(mira_obj)
+pooled_summary <- summary(final_pooled_dr, conf.int = TRUE)
 
 cat("\n--- Stage 3: 最终纵向双重稳健估计汇总结果 ---\n")
-print(summary(final_pooled_dr, conf.int = TRUE))
+print(pooled_summary)
 ```
 
 ```{r}
@@ -150,7 +154,7 @@ print(summary(final_pooled_dr, conf.int = TRUE))
 # ====================================================================
 
 # 1. 创建用于预测的虚拟数据集
-# 保持协变量为基准值（如：最常见的类别）
+# 保持协变量为基准值（参考学生画像）
 pred_data <- expand.grid(
   class_type_K = c("Regular class", "Small class"),
   grade = c("K", "1", "2", "3"),
@@ -163,28 +167,50 @@ pred_data$grade <- factor(pred_data$grade, levels = c("K", "1", "2", "3"))
 
 # 3. 从汇总模型中提取系数 (Beta counts)
 # 注意：这步需要手动构建，因为 pool() 后的对象不能直接 predict()
-betas <- summary(final_pooled_dr)$estimate
-names(betas) <- summary(final_pooled_dr)$term
+betas <- pooled_summary$estimate
+names(betas) <- pooled_summary$term
 
-# 4. 手动计算预测分值 (基于你的 Stage 3 公式 3)
+term_or_zero <- function(term) {
+  if (term %in% names(betas)) betas[[term]] else 0
+}
+
+# 4. 手动计算预测分值：允许初始小班效应随年级变化
 pred_data <- pred_data %>%
-  mutate(predicted_score = case_when(
-    # 常规班 (Baselines)
-    class_type_K == "Regular class" & grade == "K" ~ betas["(Intercept)"],
-    class_type_K == "Regular class" & grade == "1" ~ betas["(Intercept)"] + betas["grade1"],
-    class_type_K == "Regular class" & grade == "2" ~ betas["(Intercept)"] + betas["grade2"],
-    class_type_K == "Regular class" & grade == "3" ~ betas["(Intercept)"] + betas["grade3"],
-    
-    # 小班 (Baseline + Small Class Effect)
-    class_type_K == "Small class" & grade == "K" ~ betas["(Intercept)"] + betas["class_type_KSmall class"],
-    class_type_K == "Small class" & grade == "1" ~ betas["(Intercept)"] + betas["class_type_KSmall class"] + betas["grade1"],
-    class_type_K == "Small class" & grade == "2" ~ betas["(Intercept)"] + betas["class_type_KSmall class"] + betas["grade2"],
-    class_type_K == "Small class" & grade == "3" ~ betas["(Intercept)"] + betas["class_type_KSmall class"] + betas["grade3"]
-  ))
+  mutate(
+    grade_main = case_when(
+      grade == "K" ~ 0,
+      grade == "1" ~ term_or_zero("grade1"),
+      grade == "2" ~ term_or_zero("grade2"),
+      grade == "3" ~ term_or_zero("grade3")
+    ),
+    treat_main = ifelse(class_type_K == "Small class",
+                        term_or_zero("class_type_KSmall class"), 0),
+    treat_grade = case_when(
+      class_type_K == "Small class" & grade == "1" ~ term_or_zero("class_type_KSmall class:grade1"),
+      class_type_K == "Small class" & grade == "2" ~ term_or_zero("class_type_KSmall class:grade2"),
+      class_type_K == "Small class" & grade == "3" ~ term_or_zero("class_type_KSmall class:grade3"),
+      TRUE ~ 0
+    ),
+    covar_adj = term_or_zero("student_raceNon-Black") +
+      term_or_zero("free_lunch_KNon-free lunch"),
+    predicted_score = term_or_zero("(Intercept)") + grade_main +
+      treat_main + treat_grade + covar_adj
+  ) %>%
+  select(class_type_K, grade, predicted_score)
 
-# 加上种族和免费午餐的基准修正（因为我们pred_data设为了Non-Black和Non-free lunch）
-# 这步让分值回归到 Non-Black, Non-free lunch 学生的水平，更具代表性
-pred_data$predicted_score <- pred_data$predicted_score + betas["student_raceNon-Black"] + betas["free_lunch_KNon-free lunch"]
+# 5. 计算每个年级的小班优势，便于和交互项解释对应
+effect_by_grade <- tibble(
+  grade = factor(c("K", "1", "2", "3"), levels = c("K", "1", "2", "3")),
+  small_class_effect = c(
+    term_or_zero("class_type_KSmall class"),
+    term_or_zero("class_type_KSmall class") + term_or_zero("class_type_KSmall class:grade1"),
+    term_or_zero("class_type_KSmall class") + term_or_zero("class_type_KSmall class:grade2"),
+    term_or_zero("class_type_KSmall class") + term_or_zero("class_type_KSmall class:grade3")
+  )
+)
+
+pred_data <- pred_data %>%
+  left_join(effect_by_grade, by = "grade")
 ```
 
 ```{r}
@@ -200,11 +226,11 @@ ggplot(pred_data, aes(x = grade, y = predicted_score, group = class_type_K, colo
   
   # 设置坐标轴标签和标题
   labs(
-    title = "K-3年级数学成绩成长轨迹：小班与常规班对比",
-    subtitle = "基于多重插补、AIPW双重稳健估计与纵向混合效应模型",
+    title = "K-3数学成绩轨迹：按幼儿园初始班型分组",
+    subtitle = "参考学生画像下的预测值；模型允许初始小班效应随年级变化",
     x = "年级 (Grade)",
     y = "AIPW修正后预测数学成绩",
-    color = "班级类型 (Kindergarten)"
+    color = "幼儿园初始班型"
   ) +
   
   # 美化主题
@@ -221,6 +247,9 @@ ggplot(pred_data, aes(x = grade, y = predicted_score, group = class_type_K, colo
   # 设置颜色
   scale_color_manual(values = c("Regular class" = "#E41A1C", "Small class" = "#377EB8")) +
   
-  # 添加分值标签 (可选，让数值更清晰)
+  # 添加分值标签
   geom_text(aes(label = round(predicted_score, 1)), vjust = -1.5, size = 3.5, show.legend = FALSE)
+
+effect_by_grade %>%
+  mutate(small_class_effect = round(small_class_effect, 2))
 ```
