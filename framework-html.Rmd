@@ -754,16 +754,31 @@ cor_df
 
 We examined the auxiliary variables including reading score (treads), word skills (wordsk), listening score (tlists), and lagged math scores. They have shown strong correlations with math achievement, which is informative for predicting missing math outcomes and can be included in the imputation model to reduce bias. This could be considered a case of satisfying the MAR assumption.
 
-
 # Inferential Analysis
 
-This section focuses on the final inferential model rather than the computational details used to prepare the data. The descriptive analysis suggests that complete-case inference would be difficult to justify: missingness is structured across grades, baseline characteristics differ by completeness status, and several auxiliary variables are predictive of achievement. These diagnostics do not prove MAR, and the EDA itself may contain imperfections, but they do make a purely MCAR explanation implausible. Accordingly, we proceed under a working assumption that a substantial part of the missing-data process can be explained by observed student- and school-level information [@rubin1976inference; @white2011multiple; @finn2007usersguide].
+This section focuses on the final inferential model rather than the computational details used to prepare the data. Our objective is to estimate how initial assignment to a small kindergarten class affects the mathematics trajectory from kindergarten through Grade 3. Because the STAR data are longitudinal, clustered by school, and affected by nontrivial attrition, the logic of the inferential analysis must be made explicit. The strategy adopted here is therefore to state the required assumptions before each major modeling decision and to connect those decisions directly to the experimental design and the patterns seen in the EDA.
 
-Our inferential target is the effect of initial kindergarten small-class assignment on the mathematics trajectory from kindergarten through Grade 3. We deliberately use the kindergarten assignment indicator, rather than observed class type in every later grade, because the original randomization is cleanest at entry. By contrast, later observed class type is affected by mobility, reassignment, late entry, and the regular-versus-regular-aide restructuring documented in the STAR records and subsequent analyses [@word1990star; @finn2007usersguide; @ding2006dynamic]. The inferential logic is therefore: start from completed analytic datasets, adjust for selective follow-up with a doubly robust pseudo-outcome, and estimate the evolving treatment effect with a longitudinal mixed-effects model. Technical details of the imputation algorithm are deferred to later sections; here the emphasis is on the final model, its assumptions, and the interpretation of its coefficients.
+## Target estimand and treatment definition
 
-## Completed-data inputs
+Our primary estimand is the effect of initial kindergarten small-class assignment on K--3 mathematics outcomes. We deliberately use the kindergarten assignment indicator, rather than observed class type in every later grade, because the original randomization is cleanest at entry. By contrast, later observed class type is affected by mobility, reassignment, late entry, and the regular-versus-regular-aide restructuring documented in the STAR records and later analyses [@word1990star; @finn2007usersguide; @ding2006dynamic]. Under this design-based perspective, kindergarten assignment retains a defensible connection to the original experiment, while a model based on later observed class type would mix experimental assignment with post-randomization behavior.
 
-For the inferential stage, we do not re-estimate the imputation model inside this report section. Instead, we load the precomputed multiply imputed object `stars_mice_mids.rds` together with the aligned wide-format file `stars1_wide_final.rds`. The only fact needed here is that these objects deliver `m = 20` completed datasets on which the same final mixed model can be fitted. The full rationale for the multilevel MICE specification is reserved for the later methodology discussion [@vanbuuren2011mice; @enders2010applied].
+This choice also clarifies the interpretation of the final model. We are not estimating the contemporaneous effect of class size in each later grade. Instead, we estimate how the initial kindergarten assignment is associated with the subsequent trajectory of math achievement, after adjustment for observed covariates and selective follow-up.
+
+## Covariate completion before causal estimation
+
+Before constructing the doubly robust estimator, we use multivariate imputation by chained equations (MICE) to complete incompletely observed covariates and auxiliary predictors that enter the retention and outcome models. This step is necessary because the doubly robust estimator requires a reasonably complete observed history for each student; otherwise, the propensity-to-remain model and the grade-specific outcome regressions would themselves be fitted on unstable or inconsistently restricted subsets of the data [@vanbuuren2011mice; @white2011multiple].
+
+The role of MICE in this report is therefore not to replace the causal analysis, but to support it. We use fully conditional specification because the STAR data combine continuous and categorical variables, have irregular missingness across grades, and include predictors measured at multiple levels of the educational hierarchy. The imputation model includes treatment-related variables, baseline demographics, school identifiers, and auxiliary measures identified in the EDA as informative for later achievement. This is intended to make the conditional MAR assumption more plausible for the incomplete covariates used in the DR stage [@white2011multiple; @enders2010applied].
+
+An important design choice is that MICE is used to recover covariate information needed for the attrition and outcome models, while the final inferential stage continues to treat outcome missingness as a substantive problem. In other words, the completed datasets are used to stabilize the observed covariate history, but the original missingness structure of the math outcomes is restored before the DR pseudo-outcome is constructed. This keeps selective follow-up explicit in the causal analysis rather than hiding it inside a fully imputed outcome panel.
+
+The MICE step is used under the following working assumptions:
+
+- **Conditional MAR for incomplete covariates**: after conditioning on the observed treatment indicators, baseline demographics, school information, and auxiliary predictors included in the imputation model, the missingness of incomplete covariates does not depend on their unobserved values.
+- **Sufficiently rich conditional models**: the fully conditional specification is flexible enough to preserve the main relationships among treatment, covariates, and auxiliary variables that are needed later in the DR stage.
+- **Respect for hierarchical structure**: because students are nested within schools, school-level information must be represented during imputation so that the completed covariate history is compatible with the multilevel outcome analysis.
+
+Under these assumptions, the completed datasets can be used to stabilize the observed covariate history before causal estimation, while still leaving outcome attrition to be handled explicitly in the next stage.
 
 ```{r infer-stage1, include=FALSE}
 imp_data <- readRDS("stars_mice_mids.rds")
@@ -773,34 +788,78 @@ n_imp <- imp_data$m
 
 ## Final longitudinal mixed model
 
-Let $\widetilde{Y}_{ig}$ denote the doubly robust pseudo-outcome for student $i$ at grade $g$, let $T_i$ denote the kindergarten small-class assignment indicator, let $X_i$ denote the baseline adjustment vector, let $s(i)$ index the student's baseline school, and let $b_i$ denote a student-specific random intercept. The final model is
+### Limitations of complete-case analysis
+
+The descriptive analysis suggests that complete-case inference would be difficult to justify. Missingness is structured across grades, baseline characteristics differ by completeness status, and several auxiliary variables are predictive of later achievement. These diagnostics do not prove MAR, and the EDA itself may contain imperfections, but they do make a purely MCAR explanation implausible. We therefore proceed under a working assumption that a substantial part of the missing-data process can be explained by observed student- and school-level information [@rubin1976inference; @white2011multiple; @finn2007usersguide]. Under that assumption, an analysis that ignores selective follow-up is less credible than one that adjusts for it directly.
+
+### Doubly robust adjustment for selective follow-up
+
+The pseudo-outcome $\widetilde{Y}_{ig}$ is introduced to reduce bias from selective follow-up. The EDA suggests that attrition and intermittent observation are related to observed disadvantage and prior achievement, so an ordinary regression on complete cases would be vulnerable to selection bias. Following the augmented inverse-probability-weighting framework of @robins1994estimation, we combine a model for retention with a model for the observed math outcome. The key appeal is the double-robust property: the treatment-effect estimator remains consistent if either the retention model or the outcome model is correctly specified, even if the other is not [@funk2011doubly; @seaman2013introduction]. In the STAR setting, where Grade 3 attrition can be substantial and is unlikely to be captured perfectly by a single parametric model, this is a more defensible strategy than relying only on OLS adjustment [@krueger1999experimental; @ding2006dynamic].
+
+The DR step is used under the following working assumptions:
+
+- **Conditional ignorability of outcome missingness**: after conditioning on the observed treatment history, baseline covariates, and auxiliary information carried into the completed datasets, whether a student remains observed is independent of the unobserved potential math outcomes.
+- **Positivity / overlap**: every relevant subgroup has a non-negligible probability of remaining in the observed sample, so the inverse-probability weights are well defined and not dominated by extreme values.
+- **Limited interference (SUTVA)**: one student's outcome can be interpreted with respect to their own initial assignment without being materially altered by the treatment status of other students.
+- **Single-model protection through double robustness**: consistency of the DR estimator requires correct specification of at least one of the two nuisance models, namely the retention model or the outcome model [@robins1994estimation; @funk2011doubly].
+
+These assumptions are standard in causal analyses with missing outcomes, but they remain substantive rather than automatic [@seaman2013introduction; @dashti2024tmle]. Under them, the DR pseudo-outcome reduces dependence on any one parametric model and provides a more credible basis for the final longitudinal analysis.
+
+### Final model specification
+
+Once the doubly robust pseudo-outcome is constructed, we summarize it with a longitudinal mixed-effects model. Let $\widetilde{Y}_{ig}$ denote the doubly robust pseudo-outcome for student $i$ at grade $g$, let $T_i$ denote the kindergarten small-class assignment indicator, let $X_i$ denote the baseline adjustment vector, let $s(i)$ index the student's baseline school, and let $b_i$ denote a student-specific random intercept. The final model is
 $$
 \widetilde{Y}_{ig} = \beta_0 + \beta_T T_i + \delta_g + \eta_g(T_i \times \text{Grade}_g) + \gamma^\top X_i + u_{s(i)} + b_i + \epsilon_{ig},
 $$
 where $\delta_g$ captures average grade-to-grade growth, $\eta_g$ allows the effect of kindergarten assignment to vary by grade, $u_{s(i)} \sim N(0, \sigma^2_{\text{school}})$ is a school-level random intercept, $b_i \sim N(0, \sigma^2_{\text{student}})$ is a student-level random intercept, and $\epsilon_{ig}$ is an idiosyncratic error term. This follows the repeated-measures logic of @laird1982random while adapting it to the clustered STAR design. With kindergarten as the reference grade, $\beta_T$ is interpreted as the small-class effect in kindergarten, and the grade-interaction terms describe how that initial effect changes in Grades 1, 2, and 3.
 
-### Why use a doubly robust outcome?
+The final mixed model is interpreted under the following working assumptions:
 
-The pseudo-outcome $\widetilde{Y}_{ig}$ is introduced to reduce bias from selective follow-up. The EDA suggests that attrition and intermittent observation are related to observed disadvantage and prior achievement, so an ordinary regression on complete cases would be vulnerable to selection bias. Following the augmented inverse-probability-weighting framework of @robins1994estimation, we combine a model for retention with a model for the observed math outcome. The key appeal is the double-robust property: the treatment-effect estimator remains consistent if either the retention model or the outcome model is correctly specified, even if the other is not [@funk2011doubly; @seaman2013introduction]. In the STAR setting, where Grade 3 attrition can be substantial and is unlikely to be captured perfectly by a single parametric model, this is a more defensible strategy than relying only on OLS adjustment [@krueger1999experimental; @ding2006dynamic].
+- **Correct mean-structure specification**: the main systematic variation in the DR-adjusted outcome is adequately represented by initial treatment, grade, their interaction, and the selected adjustment covariates.
+- **Appropriate dependence structure**: school-level and student-level random intercepts capture the dominant clustering induced by within-school assignment and repeated measurements on the same child.
+- **Mean-zero residual variation**: conditional on the included fixed and random effects, the remaining residual component has mean zero and does not introduce systematic bias into the treatment coefficients.
+- **Intent-to-treat style interpretation**: the fitted model is interpreted as a longitudinal analysis of initial assignment, not as a model of later contemporaneous class type after post-randomization switching.
 
-This argument is still conditional on observed information. Double robustness does not remove bias from truly unmeasured causes of attrition, so the resulting estimate should be interpreted under a working ignorability assumption rather than as automatically protected against every form of nonresponse [@dashti2024tmle].
+Under these assumptions, the treatment main effect and treatment-by-grade interactions can be interpreted as summaries of how the initial kindergarten assignment relates to the subsequent K--3 achievement path. Two modeling choices deserve additional justification because they are central to the longitudinal interpretation: the multilevel random-effects structure and the treatment-by-grade interaction.
 
-### Why include both school and student random intercepts?
+### Multilevel dependence and random intercepts
 
-Project STAR randomized class type within schools rather than across the entire state, and the user guide documents substantial school-level heterogeneity in participation, withdrawal, and student mobility [@word1990star; @finn2007usersguide]. For that reason, students within the same school are expected to share common environments and administrative features that affect test performance. The school random intercept $u_{s(i)}$ captures this shared school-level variation and prevents the fixed-effect standard errors from being artificially small. At the same time, each child contributes repeated outcomes across grades, so observations from the same student are inherently correlated. The student random intercept $b_i$ accounts for persistent person-level heterogeneity in achievement and aligns the model with the longitudinal repeated-measures structure emphasized by @laird1982random. In diagnostic checks across all 20 imputed datasets, this additional random effect did not produce singular fits or convergence failures, and its variance component remained stable, so keeping both levels of clustering is empirically defensible.
+Project STAR randomized class type within schools rather than across the entire state, so students within the same school are expected to share common institutional environments and administrative features. The school random intercept $u_{s(i)}$ captures this shared school-level variation and respects the blocked nature of the original design [@word1990star; @finn2007usersguide]. At the same time, each child contributes repeated outcomes across grades, so observations from the same student are inherently correlated. The student random intercept $b_i$ accounts for persistent person-level heterogeneity in achievement and aligns the model with the repeated-measures framework of @laird1982random. In diagnostic checks across all 20 imputed datasets, this additional random effect did not produce singular fits or convergence failures, and its variance component remained stable, so retaining both levels of clustering is empirically defensible.
 
-### Why include a treatment-by-grade interaction?
+### Dynamic treatment effects across grades
 
 The interaction between kindergarten assignment and grade is essential because the substantive question is not only whether small classes help on average, but whether the advantage persists, grows, or fades over time. Omitting the interaction would force the small-class effect to be constant from kindergarten through Grade 3. That is a strong restriction in a study like STAR, where prior work has explicitly examined cumulative and dynamic treatment effects over multiple years [@ding2006dynamic]. The interaction specification lets the data distinguish the initial kindergarten effect from subsequent changes in Grades 1, 2, and 3.
 
 ### Pooling and statistical inference
 
-The same final mixed model is estimated in each of the `m = 20` completed datasets. Point estimates and confidence intervals are then pooled using Rubin's rules, so the reported uncertainty combines ordinary sampling variability with the extra uncertainty introduced by missing-data preprocessing [@rubin1987multiple]. This gives a more honest measure of precision than analyzing a single completed dataset.
+The same final mixed model is estimated in each of the `m = 20` completed datasets. Point estimates and confidence intervals are then pooled using Rubin's rules, so the reported uncertainty combines ordinary sampling variability with the extra uncertainty introduced by missing-data preprocessing [@rubin1987multiple]. All inferential results reported below therefore reflect both model-based uncertainty and uncertainty from missing-data handling, rather than treating any one completed dataset as if it were observed without error.
+
+### Answering the research questions
+
+The final model is intended to answer two connected substantive questions in a format parallel to the example report, but adapted to a pooled mixed-model setting. To keep the inferential logic transparent, the results are organized in the same order as the questions: first, a pooled joint test answers whether a small-class advantage exists at any point in K--3; second, a pooled interaction test evaluates whether that advantage changes across grades. The coefficient table and model-based plots are then used to interpret the magnitude and pattern of those answers.
+
+Question 1 asks whether students assigned to small kindergarten classes achieve higher mathematics scores than students assigned to regular classes after adjustment for selection bias. Because the final model includes a treatment-by-grade interaction, this is not a single-coefficient question outside kindergarten. The relevant null hypothesis is therefore that the entire treatment block is zero,
+$$
+H_0:\ \beta_T = \eta_1 = \eta_2 = \eta_3 = 0,
+$$
+against the alternative that at least one of these treatment-related terms is nonzero. Substantively, rejecting this null means that initial assignment to a small class is associated with higher mathematics achievement at one or more points in the K--3 trajectory after adjustment for observed selection processes.
+
+Question 2 asks whether the relationship between initial class assignment and mathematics achievement differs across grades K--3 after adjustment for selection bias. This is the question of effect heterogeneity over time. The null and alternative hypotheses are
+$$
+H_0:\ \eta_1 = \eta_2 = \eta_3 = 0
+\qquad \text{versus} \qquad
+H_A:\ \text{at least one } \eta_g \neq 0.
+$$
+Under the null, the small-class advantage is constant across grades, so the model reduces to a common treatment shift added to the grade profile. Under the alternative, the size of the treatment contrast changes as students progress from kindergarten to Grade 3.
+
+For both questions, the decision rule is the conventional one used throughout this report: at significance level $\alpha = 0.05$, we reject the relevant null hypothesis when the pooled p-value from the joint test is below 0.05, and otherwise we fail to reject it. In a multiply imputed mixed model, these questions are most naturally evaluated through pooled joint tests of the treatment block and the interaction block rather than through a single-dataset likelihood-ratio test. Specifically, we use the `D1` pooled Wald test implemented in the `mice` framework, which combines fixed-effect estimates and their covariance matrices across the 20 imputed datasets to test nested sets of coefficients under Rubin-style multiple-imputation inference.
 
 ```{r infer-stage2, include=FALSE}
 grades <- c('K', '1', '2', '3')
 math_cols <- paste0("math_score_", grades)
 dr_models_list <- vector("list", n_imp)
+main_effect_models <- vector("list", n_imp)
+null_effect_models <- vector("list", n_imp)
 failed_idx <- integer(0)
 
 for (i in seq_len(n_imp)) {
@@ -870,6 +929,16 @@ for (i in seq_len(n_imp)) {
     dr_models_list[[i]] <- NULL
   } else {
     dr_models_list[[i]] <- fit_i
+    main_effect_models[[i]] <- lmer(
+      dr_outcome ~ class_type_K + grade + student_race +
+        free_lunch_K + (1 | school_id_K) + (1 | student_id),
+      data = current_long
+    )
+    null_effect_models[[i]] <- lmer(
+      dr_outcome ~ grade + student_race +
+        free_lunch_K + (1 | school_id_K) + (1 | student_id),
+      data = current_long
+    )
   }
 }
 ```
@@ -880,18 +949,71 @@ if (length(failed_idx) > 0) {
 }
 
 valid_models <- sapply(dr_models_list, function(x) inherits(x, "merMod"))
-if (!all(valid_models)) {
-  stop("Non-merMod entries found in pooled models.")
+valid_main_models <- sapply(main_effect_models, function(x) inherits(x, "merMod"))
+valid_null_models <- sapply(null_effect_models, function(x) inherits(x, "merMod"))
+if (!all(valid_models) || !all(valid_main_models) || !all(valid_null_models)) {
+  stop("Non-merMod entries found in one or more pooled model lists.")
 }
 
 mira_obj <- as.mira(dr_models_list)
 final_pooled_dr <- pool(mira_obj)
 pooled_summary <- summary(final_pooled_dr, conf.int = TRUE)
+
+main_mira_obj <- as.mira(main_effect_models)
+null_mira_obj <- as.mira(null_effect_models)
+
+q2_test <- D1(mira_obj, main_mira_obj)
+q1_test <- D1(mira_obj, null_mira_obj)
+
+extract_d1_row <- function(test_obj) {
+  res <- test_obj[["result"]]
+  if (is.null(res) || nrow(res) < 1) {
+    stop("D1 object does not contain a usable result matrix.")
+  }
+  c(
+    stat = as.numeric(res[1, "F.value"]),
+    df1 = as.numeric(res[1, "df1"]),
+    df2 = as.numeric(res[1, "df2"]),
+    p = as.numeric(res[1, "P(>F)"])
+  )
+}
+
+q1_vals <- extract_d1_row(q1_test)
+q2_vals <- extract_d1_row(q2_test)
+
+if (!all(lengths(list(q1_vals, q2_vals)) == 4) || any(!is.finite(c(q1_vals, q2_vals)))) {
+  stop("Unable to extract pooled joint-test results from D1 objects.")
+}
+
+hypothesis_tests <- tibble::tibble(
+  Question = c(
+    "Question 1: overall small-class advantage",
+    "Question 2: grade-varying treatment effect"
+  ),
+  `Test Statistic` = c(q1_vals["stat"], q2_vals["stat"]),
+  df1 = c(q1_vals["df1"], q2_vals["df1"]),
+  df2 = c(q1_vals["df2"], q2_vals["df2"]),
+  `p value` = c(q1_vals["p"], q2_vals["p"]),
+  Decision = c(
+    ifelse(q1_vals["p"] < 0.05, "Reject H0", "Fail to reject H0"),
+    ifelse(q2_vals["p"] < 0.05, "Reject H0", "Fail to reject H0")
+  )
+)
 ```
 
-### Inference interpretation
+```{r infer-stage3-hypothesis-tests}
+hypothesis_tests %>%
+  mutate(
+    `Test Statistic` = round(`Test Statistic`, 3),
+    df2 = round(df2, 2),
+    `p value` = sapply(`p value`, fmt_p)
+  ) %>%
+  knitr::kable(caption = "Pooled joint tests for the two inferential questions")
+```
 
-The primary quantity of interest is the pooled coefficient on `class_type_KSmall class`, which corresponds to the estimated small-class advantage in kindergarten. The interaction terms `class_type_KSmall class:grade1`, `:grade2`, and `:grade3` indicate how that initial effect changes in later grades. In the current results, the kindergarten effect is clearly positive, while the interaction terms are comparatively small and imprecise. That pattern supports a sustained positive advantage for students initially assigned to small classes, but it does not provide strong evidence that the effect systematically grows over time. The race and free-lunch terms function mainly as adjustment variables, so the inferential emphasis should remain on the treatment main effect, the treatment-by-grade interactions, and the implied grade-specific small-class contrasts.
+The joint tests provide direct answers to the two research questions. Here the reported test statistic is the pooled `D1` Wald/F statistic for a nested block of coefficients, not a classical single-sample likelihood-ratio statistic. For Question 1, the pooled test of the full treatment block rejects the null hypothesis at the 5% level, indicating strong evidence that initial assignment to a small class is associated with higher mathematics achievement at some point in the K--3 period after adjustment for selection bias. For Question 2, the pooled interaction test does not cross the conventional 5% threshold, so we fail to reject the null hypothesis that the treatment effect is constant across grades. This does not imply that the interaction estimates are exactly zero; rather, it means that the observed grade-to-grade differences in the small-class advantage are not estimated with enough precision to conclude that the treatment effect truly varies over time.
+
+### Coefficient-based interpretation
 
 ```{r infer-stage3-output}
 pooled_summary %>%
@@ -915,7 +1037,15 @@ pooled_summary %>%
   knitr::kable(caption = "Pooled mixed-model estimates for the inferential analysis")
 ```
 
-## Visualization
+The primary quantity of interest in Table 1 is the pooled coefficient on `class_type_KSmall class`, which represents the estimated small-class advantage in kindergarten, the reference grade. The interaction terms `class_type_KSmall class:grade1`, `:grade2`, and `:grade3` indicate how that initial effect changes in later grades. In the current results, the kindergarten effect is clearly positive, while the interaction terms are comparatively small and imprecise. Taken together, this pattern supports a sustained positive advantage for students initially assigned to small classes, but it does not provide strong evidence that the effect systematically grows or shrinks over time.
+
+The grade coefficients should also be interpreted carefully. Because kindergarten is the reference category, the coefficients for Grades 1, 2, and 3 represent average score gains on the original math-score scale relative to kindergarten. They are therefore expected to be much larger than the treatment coefficient, since they primarily reflect normal developmental progress across primary school rather than the incremental effect of class assignment. For example, the estimated Grade 3 coefficient is roughly 138.6 points above kindergarten, while the incremental small-class effect in kindergarten is about 7.6 points.
+
+One useful way to contextualize the treatment effect is to compare it with the model-implied gain between adjacent grades on the same score scale. The estimated increase from Grade 2 to Grade 3 is about 38 points, so a kindergarten small-class advantage of roughly 7.6 points is about one-fifth of a typical one-year gain. This does not convert the treatment into "months of learning," but it does show that the estimated effect is nontrivial relative to annual academic growth in the sample.
+
+The adjustment terms for race and free-lunch status are included to improve comparability across students, but they are not the substantive focus of this section. For that reason, the most important quantities to compare in Table 1 are the treatment main effect, the treatment-by-grade interactions, and the size of the grade coefficients relative to the treatment effect. Under the assumptions stated above, the final model is best interpreted as a longitudinal intent-to-treat style analysis of initial assignment rather than a model of contemporaneous class type in each later grade.
+
+### Model-based visualization and grade-specific contrasts
 
 ```{r infer-stage3-plot, fig.width=7, fig.height=5}
 pred_data <- expand.grid(
@@ -975,6 +1105,10 @@ ggplot(pred_data, aes(x = grade, y = predicted, group = class_type_K, color = cl
   theme_minimal()
 ```
 
+Figure 1 translates the regression coefficients into predicted achievement trajectories for a common reference profile, defined here as a non-Black student who is not eligible for free lunch. This standardization is useful because interaction models are often easier to understand visually than through coefficients alone. The vertical distance between the two lines at each grade represents the model-implied small-class advantage for that grade, while the slope within each line reflects the expected grade-to-grade academic growth on the DR-adjusted outcome scale.
+
+The figure should be read as a descriptive summary of the fitted model rather than as raw sample means. Because the plot is constructed from pooled fixed-effect estimates, it isolates the treatment pattern after covariate adjustment and missing-data handling. A roughly parallel pattern would indicate a fairly stable treatment effect across grades, whereas visibly widening or narrowing separation would suggest that the advantage is changing over time. In the current results, the small-class trajectory stays above the regular-class trajectory throughout K--3, which is consistent with a persistent positive effect of initial small-class assignment.
+
 ```{r infer-stage3-effect-by-grade}
 effect_by_grade %>%
   mutate(small_class_effect = round(small_class_effect, 3)) %>%
@@ -985,6 +1119,91 @@ effect_by_grade %>%
   knitr::kable(caption = "Implied small-class effect by grade from the interaction model")
 ```
 
+Table 2 makes the interaction model easier to interpret by converting the treatment main effect and the treatment-by-grade interaction terms into a single estimated small-class contrast for each grade. This presentation is especially helpful because the coefficient table alone does not directly show the total treatment effect outside the reference grade. If the estimates in Table 2 remain positive across grades, the evidence supports a sustained achievement advantage for the initially assigned small-class group; if they were to move toward zero or change sign, that would indicate attenuation or reversal of the early treatment benefit. In the present analysis, the grade-specific contrasts remain positive in every grade, although the earlier coefficient table shows that the changes over time are estimated with limited precision.
+
+# Model Diagnostics
+
+## MICE Fills Quality and Convergence Diagnostics
+
+The core requirement of multiple imputation is that the algorithm must converge. We verify this by checking the trace plots of 20 imputations.
+
+```{r}
+plot(imp_data, c("math_score_3", "free_lunch_3", "teacher_degree_3"))
+```
+
+As shown in the figure above, the 20 curves representing different imputation sequences are highly tangled with no obvious trend or separation, indicating that the MICE algorithm has reached a stationary distribution and successfully converged. This means that the 20 'parallel worlds' we generated are statistically reliable.
+
+## Propensity Score Model Diagnosis: Positivity Check
+
+Double robust estimation relies on the overlap of propensity scores. We must ensure that in each imputed dataset, the stayed group and the attrited group have sufficient overlap in the predicted scores.
+
+```{r}
+# generate ps_list
+ps_list <- lapply(1:imp_data$m, function(i) {
+  d <- mice::complete(imp_data, i)
+  
+  d$stayed_g3 <- stars1_wide$stayed_g3
+  
+  # Propensity Model
+  fit <- glm(stayed_g3 ~ student_race + student_gender + free_lunch_K + area_type_K, 
+             data = d, family = binomial)
+  
+  return(predict(fit, type = "response"))
+})
+
+# Demonstrate the overlap using the first interpolation set as an example
+ps_df <- data.frame(
+  ps = ps_list[[1]], 
+  status = factor(stars1_wide$stayed_g3, levels = c(0, 1), labels = c("Attrited", "Stayed"))
+)
+
+# Overlap Plot
+ggplot(ps_df, aes(x = ps, fill = status)) +
+  geom_density(alpha = 0.5) +
+  scale_fill_manual(values = c("#e74c3c", "#3498db")) +
+  labs(title = "Propensity Score Overlap (Imputation 1)", 
+       subtitle = "Positivity Assumption Check",
+       x = "Estimated Probability of Staying (pi_hat)", 
+       fill = "Status") +
+  theme_minimal()
+```
+The overlap plot shows that the propensity scores of the two groups of students are highly overlapping in most areas, and there are no weights extremely close to 0 or 1. This validates the Positivity Assumption, meaning that students from each background group have a chance to remain in the study.
+
+Our Double Robust adjustment does not overly rely on a few extreme samples and satisfies the basic premise of causal inference.
+
+## Verify the normality assumption of random effects
+
+Mixed models assume that these random effects follow a normal distribution with a mean of 0, and if there is a severe deviation, the estimation of standard errors may fail. So we need to verify the normality of $u_s(i)$ (school random intercept) and $b_i$ (student random intercept)
+
+```{r}
+# extract
+random_effects <- ranef(dr_models_list[[1]])
+
+# Student-level
+qqnorm(random_effects$student_id[[1]], main = "Q-Q Plot: Student Random Effects")
+qqline(random_effects$student_id[[1]], col = "red")
+
+# School-level
+qqnorm(random_effects$school_id_K[[1]], main = "Q-Q Plot: School Random Effects")
+qqline(random_effects$school_id_K[[1]], col = "red")
+```
+
+
+## Final Mixed Effects Model Diagnosis: Residual Analysis
+
+We perform residual diagnostics on the final longitudinal model to verify the basic assumptions of linear regression.
+
+```{r resid-diag, echo=FALSE, fig.width=8, fig.height=4}
+# Run diagnostics on the first model
+par(mfrow = c(1, 2))
+plot(dr_models_list[[1]], which = 1) # Residuals vs Fitted
+qqnorm(resid(dr_models_list[[1]]))
+qqline(resid(dr_models_list[[1]]))
+```
+
+The residual plot shows that the mean is basically stable around the zero line
+
+The Q-Q plot of the residuals indicates a certain degree of heavy-tailedness, which is common in large-scale educational assessment data due to individual variations in student performance. However, according to the Central Limit Theorem, our inferential consistency remains intact given the large sample size ($n > 10,000$). The stability of the treatment effect across 20 multiple imputations further confirms that our conclusions are not driven by these distributional tails.
 # Sensitivity Analysis
 
 ## Comparison to Other Methods
@@ -994,8 +1213,6 @@ effect_by_grade %>%
 ## Alternative imputation specifications
 
 ## Pseudo-missing cross-validation for imputation quality
-
-# Final Model
 
 # Discussion
 
