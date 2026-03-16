@@ -232,7 +232,7 @@ Students ideally stayed in the same class-type assignment throughout the whole p
 Unfortunately, later studies have claimed that it is **not a completely randomized experiments**. Due to factors such as student transfers, classroom reassignment, imperfect compliance, teacher changes, and missing follow-up data, the initial randomization effect of the experiment may have been lost. When missing of the data is not at random, it can generate selection bias. Therefore, studies must address these post-randomization outcomes carefully.
 
 
-## Potential Emperical Complications that Violate Randomization
+## Potential Empirical Complications that Violate Randomization
 
  - **Student mobility / transfers.** @chetty2011classroom
 
@@ -248,7 +248,7 @@ One persistent concern of STAR Project is that there was substantial sample loss
 
 - **Attrition is related to academic performance or student disadvantage.**
 
-@ding2006dynamic shown that attrition in Project STAR was not random with respect to student performance. **Students who later attrited had significantly lower kindergarten achievement**, and that among students on free lunch, those who left the sample scored significantly **lower in mathematics** than comparable students who remained. In terms of this, if lower-performing students are more likely to leave the sample, the observed students may no longer represent randomization.
+@ding2006dynamic show that attrition in Project STAR is not random with respect to student performance. **Students who later attrited had significantly lower kindergarten achievement**, and that among students on free lunch, those who left the sample scored significantly **lower in mathematics** than comparable students who remained. Thus, if lower-performing students are more likely to leave the sample, the observed students may no longer represent randomization.
 
 - **Attrition is also related to treatment status.**
 
@@ -257,8 +257,6 @@ One persistent concern of STAR Project is that there was substantial sample loss
 # Research Questions
 
 ## Questions of Interests
-
-Our main question of interest is
 
 Do students who are assigned to smaller classes achieve higher mathematics scores than those in regular classes? If so, does this advantage persist across grades K-3?
 
@@ -581,13 +579,13 @@ where $Y_i$ is math score, $X_i$ contains the treatment-related design terms for
 
 The goal is to assess whether adding a covariate substantially changes the estimated effects of treatment variables. If a coefficient shifts noticeably after a variable is added, that variable may be acting as a confounder. As a heuristic, a covariate is flagged as a potential confounder if its inclusion changes a focal class-type coefficient by more than 10% in absolute value.
 
-In this plot, the largest changes occur after adding free lunch status, area type and student’s race, while later adding teacher's degree and gender does not changes the coefficient of treatment effects. This suggests that these three variables account for the main confounding in the relationship of $Z \rightarrow X$ or adding $Z$ changes how $X \rightarrow Y$. Thus, in our final model we need to conditioning on the effects of free lunch status, area type and student’s race in order to accurately estimate the effect of treatment variable.
+In this plot, the largest changes occur after adding free lunch status, area type and student’s race, while later adding teacher's degree and gender does not change the coefficient of treatment effects. This suggests that these three variables account for the main confounding in the relationship of $Z \rightarrow X$ or adding $Z$ changes how $X \rightarrow Y$. Thus, in our final model we need to condition on the effects of free lunch status, area type and student’s race in order to accurately estimate the effect of treatment variable.
 
 
 
 # Inferential Analysis
 
-This section focuses on the final inferential model rather than the computational details used to prepare the data. Our objective is to estimate how initial assignment to a small kindergarten class affects the mathematics trajectory from kindergarten through Grade 3. Because the STAR data are longitudinal, clustered by school, and affected by nontrivial attrition, the logic of the inferential analysis must be made explicit. The strategy adopted here is therefore to state the required assumptions before each major modeling decision and to connect those decisions directly to the experimental design and the patterns seen in the EDA.
+This section focuses on the final inferential model rather than the computational details used to prepare the data. For more detailed analyses and justification on our methods with dealing with attrition, please see Appendix 1. Our objective is to estimate how initial assignment to a small kindergarten class affects the mathematics trajectory from kindergarten through Grade 3. Because the STAR data is longitudinal, clustered by school, and is affected by nontrivial attrition, the logic of the inferential analysis must be made explicit. The strategy adopted here is therefore to state the required assumptions before each major modeling decision and to connect those decisions directly to the experimental design and the patterns seen in the EDA.
 
 ## Target estimand and treatment definition
 
@@ -618,10 +616,6 @@ n_imp <- imp_data$m
 ```
 
 ## Final longitudinal mixed model
-
-### Limitations of complete-case analysis
-
-The descriptive analysis suggests that complete-case inference would be difficult to justify. Missingness is structured across grades, baseline characteristics differ by completeness status, and several auxiliary variables are predictive of later achievement. These diagnostics do not prove MAR, and the EDA itself may contain imperfections, but they do make a purely MCAR explanation implausible. We therefore proceed under a working assumption that a substantial part of the missing-data process can be explained by observed student- and school-level information [@rubin1976inference; @white2011multiple; @finn2007usersguide]. Under that assumption, an analysis that ignores selective follow-up is less credible than one that adjusts for it directly.
 
 ### Doubly robust adjustment for selective follow-up
 
@@ -868,7 +862,7 @@ pooled_summary %>%
   knitr::kable(caption = "Pooled mixed-model estimates for the inferential analysis")
 ```
 
-The primary quantity of interest in Table 1 is the pooled coefficient on `class_type_KSmall class`, which represents the estimated small-class advantage in kindergarten, the reference grade. The interaction terms `class_type_KSmall class:grade1`, `:grade2`, and `:grade3` indicate how that initial effect changes in later grades. In the current results, the kindergarten effect is clearly positive, while the interaction terms are comparatively small and imprecise. Taken together, this pattern supports a sustained positive advantage for students initially assigned to small classes, but it does not provide strong evidence that the effect systematically grows or shrinks over time.
+The primary quantity of interest in Table 1 is the pooled coefficient on `K Small Class`, which represents the estimated small-class advantage in kindergarten, the reference grade. The interaction terms `K Small Class:Grade 1`, `:Grade 2`, and `:Grade 3` indicate how that initial effect changes in later grades. In the current results, the kindergarten effect is clearly positive, while the interaction terms are comparatively small and imprecise. Taken together, this pattern supports a sustained positive advantage for students initially assigned to small classes, but it does not provide strong evidence that the effect systematically grows or shrinks over time.
 
 The grade coefficients should also be interpreted carefully. Because kindergarten is the reference category, the coefficients for Grades 1, 2, and 3 represent average score gains on the original math-score scale relative to kindergarten. They are therefore expected to be much larger than the treatment coefficient, since they primarily reflect normal developmental progress across primary school rather than the incremental effect of class assignment. For example, the estimated Grade 3 coefficient is roughly 138.6 points above kindergarten, while the incremental small-class effect in kindergarten is about 7.6 points.
 
@@ -878,7 +872,7 @@ The adjustment terms for race and free-lunch status are included to improve comp
 
 ### Model-based visualization and grade-specific contrasts
 
-```{r infer-stage3-plot, fig.width=7, fig.height=5}
+```{r infer-stage3-plot, fig.width=6, fig.height=4, out.width = "100%"}
 pred_data <- expand.grid(
   class_type_K = c('Regular class', 'Small class'),
   grade = factor(c('K','1','2','3'), levels = c('K','1','2','3')),
@@ -930,6 +924,7 @@ effect_by_grade <- tibble(
 ggplot(pred_data, aes(x = grade, y = predicted, group = class_type_K, color = class_type_K)) +
   geom_line(size = 1.1) +
   geom_point(size = 3) +
+  geom_text(aes(label = round(predicted, 1)), vjust = -0.9, size = 4.5, show.legend = FALSE) +
   labs(title = 'Predicted Math Trajectory by Kindergarten Assignment',
        subtitle = 'Reference covariate profile; treatment effect allowed to vary by grade',
        x = 'Grade', y = 'Predicted DR-adjusted Math Score', color = 'Kindergarten Assignment') +
@@ -947,7 +942,7 @@ effect_by_grade %>%
     Grade = grade,
     `Estimated Small-Class Effect` = small_class_effect
   ) %>%
-  knitr::kable(caption = "Implied small-class effect by grade from the interaction model")
+  knitr::kable(caption = "Implied small-class effect by grade from the interaction model", align = c("l", "r"))
 ```
 
 Table 2 makes the interaction model easier to interpret by converting the treatment main effect and the treatment-by-grade interaction terms into a single estimated small-class contrast for each grade. This presentation is especially helpful because the coefficient table alone does not directly show the total treatment effect outside the reference grade. If the estimates in Table 2 remain positive across grades, the evidence supports a sustained achievement advantage for the initially assigned small-class group; if they were to move toward zero or change sign, that would indicate attenuation or reversal of the early treatment benefit. In the present analysis, the grade-specific contrasts remain positive in every grade, although the earlier coefficient table shows that the changes over time are estimated with limited precision.
@@ -1100,7 +1095,6 @@ cor_df
 ```
 
 We examined the auxiliary variables including reading score (treads), word skills (wordsk), listening score (tlists), and lagged math scores. They have shown strong correlations with math achievement, which is informative for predicting missing math outcomes and can be included in the imputation model to reduce bias. This could be considered a case of satisfying the MAR assumption.
-
 ## MICE Fills Quality and Convergence Diagnostics
 
 The core requirement of multiple imputation is that the algorithm must converge. We verify this by checking the trace plots of 20 imputations.
@@ -1144,7 +1138,28 @@ ggplot(ps_df, aes(x = ps, fill = status)) +
        x = "Estimated Probability of Staying (pi_hat)", 
        fill = "Status") +
   theme_minimal()
+
+# Positivity Check across 20 Imputations
+library(purrr)
+
+ps_all_df <- imap_dfr(ps_list, ~data.frame(
+  ps = .x, 
+  imp = .y, 
+  status = factor(stars1_wide$stayed_g3, levels = c(0, 1), labels = c("Attrited", "Stayed"))
+))
+
+# plot 20 lines
+ggplot(ps_all_df, aes(x = ps, group = interaction(status, imp), color = status)) +
+  geom_density(alpha = 0.1, size = 0.5) +
+  scale_color_manual(values = c("#e74c3c", "#3498db")) +
+  labs(title = "Propensity Score Overlap across 20 Imputations",
+       subtitle = "Checking Positivity Assumption for all 'Parallel Worlds'",
+       x = "Estimated Probability of Staying (pi_hat)", 
+       color = "Status") +
+  theme_minimal() +
+  guides(color = guide_legend(override.aes = list(alpha = 1, size = 1.5)))
 ```
+
 The overlap plot shows that the propensity scores of the two groups of students are highly overlapping in most areas, and there are no weights extremely close to 0 or 1. This validates the Positivity Assumption, meaning that students from each background group have a chance to remain in the study.
 
 Our Double Robust adjustment does not overly rely on a few extreme samples and satisfies the basic premise of causal inference.
@@ -1175,8 +1190,21 @@ We perform residual diagnostics on the final longitudinal model to verify the ba
 # Run diagnostics on the first model
 par(mfrow = c(1, 2))
 plot(dr_models_list[[1]], which = 1) # Residuals vs Fitted
-qqnorm(resid(dr_models_list[[1]]))
-qqline(resid(dr_models_list[[1]]))
+
+# QQ plot for 20 models
+par(mfrow = c(1, 2))
+
+res_1 <- resid(dr_models_list[[1]])
+qqnorm(res_1, main = "Residuals QQ (20 Imps)", 
+       col = scales::alpha("grey", 0.3), pch = 20)
+
+for(i in 2:20) {
+  res_i <- resid(dr_models_list[[i]])
+  points(qqnorm(res_i, plot.it = FALSE), 
+         col = scales::alpha("grey", 0.1), pch = 20)
+}
+# add line
+qqline(res_1, col = "red", lwd = 2)
 ```
 
 The residual plot shows that the mean is basically stable around the zero line
@@ -1201,6 +1229,20 @@ vc <- as.data.frame(VarCorr(dr_models_list[[1]]))
 icc_student <- vc$vcov[2] / sum(vc$vcov) # student
 icc_school  <- vc$vcov[1] / sum(vc$vcov) # school
 cat("ICC Student:", round(icc_student, 3), "\nICC School:", round(icc_school, 3))
+
+# ICC from 20 models
+icc_results <- map_dfr(dr_models_list, ~{
+  vc <- as.data.frame(VarCorr(.x))
+  data.frame(
+    icc_student = vc$vcov[2] / sum(vc$vcov),
+    icc_school  = vc$vcov[1] / sum(vc$vcov)
+  )
+})
+
+cat("\nPooled ICC (Student):", round(mean(icc_results$icc_student), 3), 
+    "(Range:", round(min(icc_results$icc_student), 3), "-", round(max(icc_results$icc_student), 3), ")\n")
+cat("Pooled ICC (School):", round(mean(icc_results$icc_school), 3), 
+    "(Range:", round(min(icc_results$icc_school), 3), "-", round(max(icc_results$icc_school), 3), ")\n")
 
 # nomality check
 re <- ranef(dr_models_list[[1]])
@@ -1280,40 +1322,60 @@ As shown in the table, after trimming 5% of the extreme weights, the estimated e
 This is a test for attrition bias. We assume that the true math scores of students who dropped out are $\delta$ points lower than the model's predictions under the MAR assumption. For example, because the psychological state or environment of students who drop out is worse. We observe how the small class effect (ATE) changes as Δ increases from 0 to 25 points.
 
 ```{r}
-# set deltas
+# Delta-Adjustment (Pooled MNAR Stress Test)
+
 deltas <- seq(0, 25, by = 5)
 
-# iteratively calc the small coefficient under different Deltas
-impact_on_ate <- sapply(deltas, function(d) {
-  # deal with missing
-  adj_pseudo = d_sens$dr_pseudo
-  adj_pseudo[d_sens$stayed_g3 == 0] <- adj_pseudo[d_sens$stayed_g3 == 0] - d
+# 20 subset delta circle
+pooled_delta_results <- map_dfr(1:imp_data$m, function(i) {
+  d <- mice::complete(imp_data, i)
+  d$stayed_g3 <- stars1_wide$stayed_g3
+  d$math_score_3_raw <- stars1_wide$math_score_3
   
-  # extract small class parameters
-  fit <- lm(adj_pseudo ~ class_type_K, data = d_sens)
-  coef(fit)["class_type_KSmall class"]
+  d$pi_hat <- ps_list[[i]]
+  
+  # calc DR
+  out_fit <- lm(math_score_3 ~ class_type_K + student_race + free_lunch_K + area_type_K, 
+                data = d[d$stayed_g3 == 1, ])
+  d$m_hat <- predict(out_fit, newdata = d)
+  
+  # generate DR Pseudo-outcome
+  dr_base <- d$m_hat + (d$stayed_g3 / d$pi_hat) * (ifelse(is.na(d$math_score_3_raw), 0, d_sens$math_score_3_raw) - d$m_hat)
+  
+  # Delta circle
+  sapply(deltas, function(delta) {
+    adj_pseudo <- dr_base
+    adj_pseudo[d$stayed_g3 == 0] <- adj_pseudo[d$stayed_g3 == 0] - delta
+    coef(lm(adj_pseudo ~ class_type_K, data = d))["class_type_KSmall class"]
+  }) %>% 
+    as.data.frame() %>% 
+    t() %>% 
+    as.data.frame() %>% 
+    mutate(imp = i)
 })
 
-# plot
-delta_df <- data.frame(Delta = deltas, ATE = impact_on_ate)
+names(pooled_delta_results)[1:length(deltas)] <- as.character(deltas)
+delta_long <- pooled_delta_results %>%
+  pivot_longer(cols = -imp, names_to = "Delta", values_to = "ATE") %>%
+  mutate(Delta = as.numeric(Delta))
 
-ggplot(delta_df, aes(x = Delta, y = ATE)) +
-  geom_line(color = "#2563eb", size = 1.2) +
-  geom_point(size = 3, color = "#2563eb") +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "#e74c3c") +
-  annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0, ymax = Inf, alpha = 0.1, fill = "green") +
-  labs(title = "Causal Effect Stability under Delta-Adjustment",
-       subtitle = "Assessing the impact of non-random attrition (MNAR)",
-       x = "Assumed Score Penalty for Dropouts (Delta)",
-       y = "Estimated Small Class Advantage (ATE)") +
+# plot
+ggplot(delta_long, aes(x = Delta, y = ATE)) +
+  geom_line(aes(group = imp), alpha = 0.2, color = "blue") +
+  stat_summary(fun = mean, geom = "line", size = 1.5, color = "red") +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Pooled Delta-Adjustment Sensitivity Analysis",
+       subtitle = "Blue lines: Individual Imputations | Red line: Average ATE",
+       x = "Assumed Penalty for Dropouts (Delta)",
+       y = "Small Class Advantage (ATE)") +
   theme_minimal()
 ```
 
-The above figure shows the results of the sensitivity analysis. The horizontal axis represents the number of points by which the grades of the assumed dropout students are lower than the predicted values. 
+The above figure shows the results of the sensitivity analysis. The horizontal axis represents the number of points by which the grades of the assumed dropout students are lower than the predicted values. This test involves a pooled Delta-adjustment across all 20 imputations.
 
-Even if we make an extremely aggressive assumption—that the performance of dropout students is more than 20 points lower than predicted (about 0.5 standard deviations)—the causal effect (ATE) of small class teaching is still significantly greater than 0. 
+Even if we make an extremely aggressive assumption that the performance of dropout students is more than 20 points lower than predicted (about 0.5 standard deviations), the causal effect (ATE) of small class teaching is still significantly greater than 0.
 
-This strongly demonstrates that even in the presence of non-random dropout (MNAR), the academic benefits of small classes still have very strong statistical robustness.
+This strongly demonstrates that even in the presence of non-random dropout (MNAR), the academic benefits of small classes still have very strong statistical robustness. They are not an artifact of random or non-random sample loss.
 
 ## 6.3 Comparison of Alternatives and Other Robustness Checks
 
@@ -1399,43 +1461,42 @@ ggplot(comp_df, aes(x = Specification, y = Estimate, fill = Specification)) +
         axis.text.x = element_text(size = 11, face = "bold"))
 ```
 
-## Comparison to Other Methods
 
-## Alternative sample definitions
-
-## Alternative imputation specifications
-
-## Pseudo-missing cross-validation for imputation quality
-
-# Discussion
-
-## Interpretation of Results
-
-## Limitations
+# Limitations
 
 Despite our best efforts to make our model as rigorous as possible, there are still some limitations within our study.
 
-### Reliance on MAR assumption
+## Reliance on MAR assumption
 
 Our work heavily relies on the data to be Missing At Random. If in reality we do not have MAR, we would have majorly biased results. Although we have conducted extensive analyses on the MAR assumption, we cannot rule out the case of MNAR with complete certainty. If unobserved values do in fact influence attrition, we would have a very biased model.
 
-### Additional Potential Unobserved Confounders
+## Additional Potential Unobserved Confounders
 
 As extensive as the details of the STAR database is, there are still potential unobserved confounders lurking within the data. For example, school resources. These could be potential confounders as suppose a school only has enough resources to allocate a certain number of small classes. The school also could potentially have less resources for a student to consult with in regards with schoolwork. Thus, this would be a potential confounder as it affects both the treatment assignment of class type and the response of math score.
 
-### Academic Achievement
+## Academic Achievement
 
-While math score is a key indicator of academic achievement, it is not the only one. Other indicators of academic achievement include 
+While math score is a key indicator of academic achievement, it is not the only one. Other indicators of academic achievement such as reading scores were not analyzed. It is possible that smaller class size could have a negative impact on other indicators of academic achievement. For example, a smaller class size means less classmates to discuss with.
+
+## Limitations of complete-case analysis
+
+The descriptive analysis suggests that complete-case inference would be difficult to justify. Missingness is structured across grades, baseline characteristics differ by completeness status, and several auxiliary variables are predictive of later achievement. These diagnostics do not prove MAR, and the EDA itself may contain imperfections, but they do make a purely MCAR explanation implausible. We therefore proceed under a working assumption that a substantial part of the missing-data process can be explained by observed student- and school-level information [@rubin1976inference; @white2011multiple; @finn2007usersguide]. Under that assumption, an analysis that ignores selective follow-up is less credible than one that adjusts for it directly.
 
 
 # Conclusion
 
-After adjusting for potential confounders and addressing missing data issues via imputation methods, we conclude that there is a difference between 
+After adjusting for potential confounders and addressing missing data issues via imputation methods, we conclude that there is a difference in academic achievement, particularly in mathematics scores, between students in small class sizes and students who are in regular sized classes. The grade coefficients should also be interpreted carefully. Because kindergarten is the reference category, the coefficients for Grades 1, 2, and 3 represent average score gains on the original math-score scale relative to kindergarten. They are therefore expected to be much larger than the treatment coefficient, since they primarily reflect normal developmental progress across primary school rather than the incremental effect of class assignment. For example, the estimated Grade 3 coefficient is roughly 138.6 points above kindergarten, while the incremental small-class effect in kindergarten is about 7.6 points.
 
-# References
+One useful way to contextualize the treatment effect is to compare it with the model-implied gain between adjacent grades on the same score scale. The estimated increase from Grade 2 to Grade 3 is about 38 points, so a kindergarten small-class advantage of roughly 7.6 points is about one-fifth of a typical one-year gain. This does not convert the treatment into “months of learning,” but it does show that the estimated effect is nontrivial relative to annual academic growth in the sample.
 
 
+# Acknowledgements
 
+LLMs such as ChatGPT and Google Gemini were used in this report. They were used to rephrase and format certain blocks of text. In addition, we used LLMs to debug and optimize our code. All analyses and interpretations were done by human hand.
+
+# Bibliography
+
+<div id='refs'></div>
 
 # Appendix A - Imputation Methodology
 
@@ -1711,4 +1772,207 @@ The table summarizes the standardized mean differences (SMDs) of baseline covari
 
 
 # Appendix 2 - Code for reproducibility
+
+The following is all the code we used in our project. In addition, our GitHub repository can be found here at <a href='https://github.com/rttliu/STA207Project'>STA207 Project</a>
+
+
+
+```{r, eval=FALSE}
+# ====================================================================
+# STEP 0: Load the Data
+# ====================================================================
+# Load the dataset exactly as you saved it from Phase 1
+stars1 <- readRDS("stars_cleaned_eda.rds")
+
+# ====================================================================
+# STEP 1: PRE-PROCESS (LOCF on Long Data)
+# ====================================================================
+stars1_locf <- stars1 %>%
+  # 1a. Sort chronologically for each student
+  arrange(student_id, grade) %>%
+  group_by(student_id) %>%
+  # 1b. Safely fill fixed demographic traits backwards and forwards ACROSS ROWS
+  fill(student_gender, student_race, birth_year, birth_month, .direction = "downup") %>%
+  ungroup()
+
+# ====================================================================
+# STEP 2 REVISED: PIVOT TO WIDE FORMAT (Keeping ALL Confounders)
+# ====================================================================
+stars1_wide <- stars1_locf %>%
+  # 1. Select absolutely everything, but drop the manual lags if you want 
+  # (because Wide format natively creates lags, e.g., math_score_K IS the lag for Grade 1).
+  # If you want to keep them, just leave them in the time-variant list.
+  select(-math_lag1, -math_lag2, -math_lag3) %>% 
+  
+  pivot_wider(
+    names_from = grade,
+    # 2. Put ALL time-variant variables here so they split by grade
+    values_from = c(
+      math_score, class_type, class_size, area_type, free_lunch,
+      school_id, teacher_id, teaching_years, teacher_degree, teacher_career, 
+      teacher_gender, teacher_race, 
+      treads, tlists, wordsk, motivr, selfco, readbs, mathbs
+    ),
+    names_glue = "{.value}_{grade}"
+  ) %>%
+  # 3. Create the missingness indicator
+  mutate(stayed_g3 = as.numeric(!is.na(math_score_3))) %>%
+  # 4. Factorize (You will need to add the new categorical variables to this list)
+  mutate(across(c(student_gender, student_race, 
+                  starts_with("class_type"), starts_with("free_lunch"), 
+                  starts_with("area_type"), starts_with("teacher_gender"),
+                  starts_with("teacher_race"), starts_with("teacher_degree"),
+                  starts_with("teacher_career")), as.factor))
+
+# Quick sanity check
+cat("New Dimensions of Wide Data:\n")
+dim(stars1_wide)
+saveRDS(stars1_wide, "stars1_wide_final.rds")
+```
+
+```{r, eval=FALSE}
+library(future)
+# ====================================================================
+# REVISED STEP 3: MICE Imputation with Cluster Awareness
+# ====================================================================
+
+
+# 1. Clean the input: Remove the constant variables flagged by mice
+stars_mice_input <- stars1_wide %>%
+  select(
+    -student_id,       # Remove ID from the math
+    -stayed_g3, 
+    -starts_with("teacher_id"), 
+    -starts_with("class_size"),
+    -teacher_gender_K, # Flagged as constant
+    -readbs_K,         # Flagged as constant
+    -mathbs_K,          # Flagged as constant\
+    # DROP THE ALIASES: We only need the baseline Area Type
+    -area_type_1, -area_type_2, -area_type_3
+  )
+
+# Dry run with 0 iterations
+ini <- mice(stars_mice_input, maxit = 0)
+
+# See what method was assigned to each variable
+# ini$method
+
+
+# 2. Start with the sparse matrix (mincor = 0.15) to prevent singularity
+pred_final <- quickpred(stars_mice_input, mincor = 0.15)
+
+# 3. Identify our EDA "Must-Haves"
+must_haves <- c("free_lunch_K", "free_lunch_1", "free_lunch_2", "free_lunch_3",
+                "school_id_K", "school_id_1", "school_id_2", "school_id_3",
+                "student_race", "area_type_K")
+
+# 4. Identify our Target Outcomes (Math Scores)
+math_outcomes <- c("math_score_K", "math_score_1", "math_score_2", "math_score_3")
+
+# 4. FORCE the Must-Haves to predict the Math Outcomes
+# This ensures that even if correlation was < 0.15 in a specific slice, 
+# the structural and socio-economic context is always used.
+pred_final[math_outcomes, must_haves] <- 1
+
+# 5. Clean up: Ensure student_id is NEVER a predictor (Safety check)
+if("student_id" %in% colnames(pred_final)) pred_final[, "student_id"] <- 0
+
+# 3. Final Execution
+imp_data <- futuremice(
+  stars_mice_input,
+  m = 20,
+  maxit = 20,
+  predictorMatrix = pred_final, # Using the thinned-out matrix
+  ridge = 0.001,                  # Safety net for singularity
+  parallelseed = 2026207
+)
+
+plan(sequential)
+
+# Check if it succeeded!
+cat("Parallel MICE successfully completed!\n")
+
+# Redundant Area/School Info: If area_type_K (Urban/Rural) is constant for every student within school_id_K, and you have both in the model, they are perfectly collinear.Constant Variables: Check if any column has the same value for almost everyone (e.g., if almost all students in your subset are the same race or have the same teacher degree).The "Wide Data" Trap: You have math_score_K, math_score_1, math_score_2, and math_score_3. If these are extremely highly correlated ($r > 0.95$), the matrix becomes unstable.
+```
+
+```{r, eval=FALSE}
+# Extract one imputed dataset (e.g., the 1st one)
+check_data <- complete(imp_data, 1)
+
+# Check for missing values in your key columns
+colSums(is.na(check_data[, c("free_lunch_3", "student_race", "school_id_K", "treads_3")]))
+
+# Red lines = Imputed values; Blue line = Observed values
+densityplot(imp_data, ~ math_score_3 + treads_3 + free_lunch_3)
+
+```
+```{r, eval=FALSE}
+# Check the relationship between a covariate (e.g., Reading) and the outcome (Math)
+xyplot(imp_data, math_score_3 ~ treads_3, pch = 18, cex = 0.7)
+
+
+```
+
+```{r, eval=FALSE}
+# Compare the proportion of "Free Lunch" in observed vs imputed
+prop.table(table(stars1_wide$free_lunch_3)) # Original
+prop.table(table(check_data$free_lunch_3))   # Imputed
+
+```
+
+```{r, eval=FALSE}
+# Plot convergence for your primary outcome and a key covariate
+plot(imp_data, c("math_score_3", "free_lunch_3"))
+
+pred_refined <- quickpred(stars_mice_input, mincor = 0.15)
+
+pred_refined
+```
+
+```{r, eval=FALSE}
+# ====================================================================
+# STEP 4: Optimized Version
+# ====================================================================
+
+cat("Saving results to disk...\n")
+
+saveRDS(imp_data, "stars_mice_mids.rds")
+
+stars_imputed_long <- complete(imp_data, action = "long", include = FALSE) %>%
+  mutate(student_id = rep(stars1_wide$student_id, times = imp_data$m)) %>%
+
+  select(student_id, .imp, .id, everything())
+
+saveRDS(stars_imputed_long, "stars_imputed_long.rds")
+
+cat("Success! Total rows saved:", nrow(stars_imputed_long), "\n")
+```
+
+```{r, eval=FALSE}
+library(lattice)
+
+densityplot(imp_data, ~ readbs_1)
+
+densityplot(imp_data, ~ teaching_years_1)
+```
+
+```{r, eval=FALSE}
+completed_data <- complete(imp_data, 1)
+
+math_cols <- c("math_score_K", "math_score_1", "math_score_2", "math_score_3")
+
+stars_dr_prepared <- completed_data %>%
+  mutate(
+    student_id = stars1_wide$student_id,
+    stayed_g3  = stars1_wide$stayed_g3
+  ) %>%
+  mutate(across(all_of(math_cols), ~ stars1_wide[[cur_column()]]))
+```
+
+
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+labs = knitr::all_labels()
+labs = setdiff(labs, c("setup", "get-labels"))
+```
+
 
