@@ -2,32 +2,34 @@
 
 This repository contains the group project for STA207. The project focuses on statistical modeling, analysis, and reproducible reporting. All code, data processing steps, and final results are maintained here to ensure transparency and collaborative development.
 
-## How to Run the Project
+# Longitudinal Effects of Small Class Sizes on Academic Achievement
 
-To ensure reproducibility, all collaborators should clone the repository and run the analysis from the project root directory.
+## Overview
+This repository contains the final report analyzing the impact of class size on students' academic success. Specifically, the project explores the longitudinal effects of small class sizes on academic achievement from kindergarten through third grade. The analysis addresses challenges like non-random attrition and clustered data to provide robust, causal insights.
 
-1. In RStudio, go to: File → New Project → Version Control → Git  
-2. Use the following repository URL: https://github.com/rttliu/STA207Project.git
-3. Choose a local directory and click **Create Project**.
+## Data Source
+The analysis uses data from the **Tennessee Student/Teacher Achievement Ratio (STAR) project**, a large-scale, randomized controlled trial designed to study the effects of class size in early education.
 
-After cloning, confirm that the project root contains: README.md, STAR.tab, code/, report/, and output/.
-To load the dataset, run the following in R from the project root:
+## Methodology
+To ensure accurate causal inference and handle data limitations, this project employs advanced statistical techniques:
+* **Handling Attrition:** We utilized Multiple Imputation by Chained Equations (MICE) combined with doubly robust estimation to address severe non-random attrition in the later stages of the experiment.
+* **Modeling:** We built a **mixed-effects model** featuring both school- and student-level random intercepts. This accounts for the naturally clustered nature of educational data.
+* **Validation:** Model diagnostics and sensitivity analyses were conducted to ensure the robustness of the results.
 
-```r
-df <- read.table("STAR.tab", header = TRUE, sep = "\t")
-```
+## Key Findings
+After correcting for attrition bias and controlling for relevant background variables, our analysis revealed the following:
+* **Significant Math Gains:** Initial assignment to a small class in kindergarten results in a significant causal gain of approximately **7.5 points** on overall mathematics achievement.
+* **Persistent Advantage:** The academic advantage gained from small class assignments remains constant across all grades (Kindergarten through 3rd grade).
 
-## How to Update the Repository
+## How to View the Report
+The full analysis, including visualizations and detailed statistical outputs, is available in the `Final_Report.html` file. 
 
-To keep the project synchronized, all collaborators should commit and push their local changes after completing updates.
+To view it:
+1. Download the `Final_Report.html` file to your local machine.
+2. Double-click the file, or right-click and open it with any modern web browser (e.g., Chrome, Firefox, Safari, Edge).
 
-1. If you amend any R code, please re-render the document by clicking **Knit**. For minor formatting or structural changes, it is not necessary to wait for the entire document to finish compiling. But make sure it is reproductible.
-2. In RStudio, open the **Git** tab (top-right panel).
-3. Check the modified files. If it displays an 'M' at the capital, then it is modified.
-4. Click **Commit**.
-5. Enter a clear commit message describing your changes (e.g., "Update data cleaning script").
-6. Click **Commit**, then click **Push** to upload changes to GitHub. (You do not have to select the file and click Push)
-
+---
+*Note: This report was generated as an HTML document for easy viewing and interactive data exploration.*
 
 ## Reproducibility
 
