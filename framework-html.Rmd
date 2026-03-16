@@ -1434,6 +1434,20 @@ ggplot(comp_df, aes(x = Specification, y = Estimate, fill = Specification)) +
 
 # Discussion
 
+## Limitations
+
+Despite our best efforts to make our model as rigorous as possible, there are still some limitations within our study.
+
+### Reliance on MAR assumption
+
+Our work heavily relies on the data to be Missing At Random. If in reality we do not have MAR, we would have majorly biased results. Although we have conducted extensive analyses on the MAR assumption, we cannot rule out the case of MNAR with complete certainty. If unobserved values do in fact influence attrition, we would have a very biased model.
+
+### Additional Potential Unobserved Confounders
+
+As extensive as the details of the STAR database is, there are still potential unobserved confounders lurking within the data. For example, school resources. These could be potential confounders as suppose a school only has enough resources to allocate a certain number of small classes. The school also could potentially have less resources for a student to consult with in regards with schoolwork. Thus, this would be a potential confounder as it affects both the treatment assignment of class type and the response of math score.
+
+
+
 # Conclusion
 
 # References
