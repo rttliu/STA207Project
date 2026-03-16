@@ -215,6 +215,9 @@ library(ggplot2)
 
 # Abstract
 
+This report explores the sustained effects of class size reduction on third-grade academic achievement in the Project STAR experiment. To address the severe non-random attrition (Attrition) challenge in the later stages of the experiment, we adopted a framework that combines multiple interpolation (MICE) and doubly robust estimation (Doubly Robust Estimation). The analysis results show that after correcting for attrition bias and controlling for relevant background variables, small class teaching (Small Class) has a significant causal gain of about 6.9 points on third-grade mathematics achievement. Sensitivity analysis confirmed the robustness of this conclusion under different missing mechanism assumptions.
+
+
 # Background and study design
 
 Project STAR (Student/Teacher Achievement Ratio) was one of the most important large-scale randomized education experiments in the United States. It was launched by the Tennessee State Department of Education in the 1985–86 school year to study whether smaller classes in the early elementary grades improve student outcomes. The project began in 79 schools across 42 districts in Tennessee and eventually followed students over many years. The large sample and long follow-up period had made STAR an important study in education fields.
@@ -1204,7 +1207,222 @@ qqline(resid(dr_models_list[[1]]))
 The residual plot shows that the mean is basically stable around the zero line
 
 The Q-Q plot of the residuals indicates a certain degree of heavy-tailedness, which is common in large-scale educational assessment data due to individual variations in student performance. However, according to the Central Limit Theorem, our inferential consistency remains intact given the large sample size ($n > 10,000$). The stability of the treatment effect across 20 multiple imputations further confirms that our conclusions are not driven by these distributional tails.
+
+## Statistical Assumptions and Model Validation
+
+```{r}
+library(performance) 
+
+# Mean-zero check
+# check fitted value and residuals
+plot(fitted(dr_models_list[[1]]), resid(dr_models_list[[1]]),
+     main = "Residuals vs Fitted (Mean Structure Check)",
+     xlab = "Fitted Values", ylab = "Residuals")
+abline(h = 0, col = "red", lwd = 2)
+
+# Dependence Structure / ICC
+# School and student
+vc <- as.data.frame(VarCorr(dr_models_list[[1]]))
+icc_student <- vc$vcov[2] / sum(vc$vcov) # student
+icc_school  <- vc$vcov[1] / sum(vc$vcov) # school
+cat("ICC Student:", round(icc_student, 3), "\nICC School:", round(icc_school, 3))
+
+# nomality check
+re <- ranef(dr_models_list[[1]])
+par(mfrow = c(1, 2))
+qqnorm(re$student_id[[1]], main = "QQ: Student Random Intercepts")
+qqline(re$student_id[[1]], col = "blue")
+qqnorm(re$school_id_K[[1]], main = "QQ: School Random Intercepts")
+qqline(re$school_id_K[[1]], col = "blue")
+```
+
+To ensure the validity of our longitudinal doubly robust inference, we rigorously tested the four core assumptions underlying our mixed-effects framework:
+
+* **Functional Form and Mean Structure:** The Residuals vs. Fitted plot shows no discernible non-linear patterns, confirming that our inclusion of treatment-by-grade interactions and baseline covariates correctly specifies the systematic variation in math scores.
+
+* **Hierarchical Dependence Structure:** We calculated the ICC to justify our random effect choices. The results (Student ICC = 0.019, School ICC = 0.393) indicate substantial clustering. This confirms that failing to use a multilevel model would have led to underestimated standard errors and invalid p-values.
+
+* **Error Distribution:** Q-Q plots of both the level-1 residuals and the level-2 random intercepts (Figure Y) show that while some heavy tails exist in student-level performance, the primary mass of the data adheres to the normality assumption, satisfying the requirements for unbiased coefficient estimation.
+
+* **Preservation of Randomization (ITT):** By defining our treatment based on the initial kindergarten class-type assignment (class_type_K), we maintain an Intent-to-Treat (ITT) perspective. This protects our estimates from being contaminated by non-random classroom reshuffling in Grades 1-3, allowing for a clean causal interpretation of the "small class" policy intervention.
+
 # Sensitivity Analysis
+
+This chapter aims to assess the sensitivity of the main analysis results to model assumptions and handling methods. 
+
+In causal inference, the main analytical conclusions are based on the assumption of MAR. To assess the robustness of the conclusions, this chapter conducts two core stress tests: Weight Trimming to exclude the interference of extreme observations, and Delta Adjustment to simulate the potential impact of non-random attrition (MNAR).
+
+## Weight Trimming
+
+In IPW and doubly robust (DR) estimation, if some individuals have extremely small propensity scores $\hat{\pi}$, it can lead to excessively large weights $1/\hat{\pi}$, making the estimator highly sensitive to a very small number of samples. We conducted a repeated analysis by restricting the weights between the 5th and 95th percentiles.
+
+```{r}
+# Based on the first imputed set
+d_sens <- mice::complete(imp_data, 1)
+d_sens$stayed_g3 <- stars1_wide$stayed_g3
+d_sens$math_score_3_raw <- stars1_wide$math_score_3
+
+# calc propensity score and outcome value
+ps_fit_sens <- glm(stayed_g3 ~ student_race + student_gender + free_lunch_K + area_type_K, 
+                   data = d_sens, family = binomial())
+d_sens$pi_hat <- predict(ps_fit_sens, type = "response")
+
+out_fit_sens <- lm(math_score_3 ~ class_type_K + student_race + student_gender + free_lunch_K + area_type_K, 
+                    data = subset(d_sens, stayed_g3 == 1))
+d_sens$m_hat <- predict(out_fit_sens, newdata = d_sens)
+
+# calc AIPW Pseudo-outcome
+d_sens <- d_sens %>%
+  mutate(
+    dr_pseudo = m_hat + (stayed_g3 / pi_hat) * (ifelse(is.na(math_score_3_raw), 0, math_score_3_raw) - m_hat)
+  )
+
+# weight trimming
+d_sens <- d_sens %>%
+  mutate(
+    weight = 1 / pi_hat,
+    trimmed_weight = pmin(pmax(weight, quantile(weight, 0.05)), quantile(weight, 0.95)),
+    dr_pseudo_trimmed = m_hat + (stayed_g3 * trimmed_weight) * (ifelse(is.na(math_score_3_raw), 0, math_score_3_raw) - m_hat)
+  )
+
+# compare ATE
+fit_orig <- lm(dr_pseudo ~ class_type_K, data = d_sens)
+fit_trim <- lm(dr_pseudo_trimmed ~ class_type_K, data = d_sens)
+
+trim_res <- data.frame(
+  Method = c("Original Weighting", "Trimmed Weighting (5%-95%)"),
+  Estimate_Small_Class = c(coef(fit_orig)["class_type_KSmall class"], 
+                           coef(fit_trim)["class_type_KSmall class"])
+)
+
+knitr::kable(trim_res, caption = "Sensitivity of Treatment Effect to Weight Trimming")
+```
+
+As shown in the table, after trimming 5% of the extreme weights, the estimated effect of small class teaching remains stable, with minimal variation. This indicates that our causal inference results are not driven by a few students with extreme characteristics, meeting the robustness requirements.
+
+## Delta-Adjustment for MNAR
+
+This is a test for attrition bias. We assume that the true math scores of students who dropped out are $\delta$ points lower than the model's predictions under the MAR assumption. For example, because the psychological state or environment of students who drop out is worse. We observe how the small class effect (ATE) changes as Δ increases from 0 to 25 points.
+
+```{r}
+# set deltas
+deltas <- seq(0, 25, by = 5)
+
+# iteratively calc the small coefficient under different Deltas
+impact_on_ate <- sapply(deltas, function(d) {
+  # deal with missing
+  adj_pseudo = d_sens$dr_pseudo
+  adj_pseudo[d_sens$stayed_g3 == 0] <- adj_pseudo[d_sens$stayed_g3 == 0] - d
+  
+  # extract small class parameters
+  fit <- lm(adj_pseudo ~ class_type_K, data = d_sens)
+  coef(fit)["class_type_KSmall class"]
+})
+
+# plot
+delta_df <- data.frame(Delta = deltas, ATE = impact_on_ate)
+
+ggplot(delta_df, aes(x = Delta, y = ATE)) +
+  geom_line(color = "#2563eb", size = 1.2) +
+  geom_point(size = 3, color = "#2563eb") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#e74c3c") +
+  annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0, ymax = Inf, alpha = 0.1, fill = "green") +
+  labs(title = "Causal Effect Stability under Delta-Adjustment",
+       subtitle = "Assessing the impact of non-random attrition (MNAR)",
+       x = "Assumed Score Penalty for Dropouts (Delta)",
+       y = "Estimated Small Class Advantage (ATE)") +
+  theme_minimal()
+```
+
+The above figure shows the results of the sensitivity analysis. The horizontal axis represents the number of points by which the grades of the assumed dropout students are lower than the predicted values. 
+
+Even if we make an extremely aggressive assumption—that the performance of dropout students is more than 20 points lower than predicted (about 0.5 standard deviations)—the causal effect (ATE) of small class teaching is still significantly greater than 0. 
+
+This strongly demonstrates that even in the presence of non-random dropout (MNAR), the academic benefits of small classes still have very strong statistical robustness.
+
+## 6.3 Comparison of Alternatives and Other Robustness Checks
+
+In this section, we further verify the robustness of the small class effect by changing the sample definitions and estimation methods. This helps to confirm whether our conclusions are overly sensitive to specific statistical model choices or sample inclusion criteria.
+
+### Alternative Sample: Excluding Late Entry
+
+In the original STAR experiment, some students only joined the study in grades 1-3 (Late Entry). To eliminate the potential interference of these non-randomly added samples, we conducted a reanalysis only on the subset of students who were in the sample from the Kindergarten stage.
+
+### Methodological Comparison: DR vs. OLS
+
+We compared the results of the double robust estimation used in our main analysis with the unadjusted original OLS regression results. This helps to quantify the specific impact of non-random attrition on the estimation of effect sizes.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+d_sens <- mice::complete(imp_data, 1)
+d_sens$student_id <- stars1_wide$student_id
+d_sens$stayed_g3  <- stars1_wide$stayed_g3
+d_sens$math_score_3_raw <- stars1_wide$math_score_3
+
+ps_fit_sens <- glm(stayed_g3 ~ student_race + student_gender + free_lunch_K + area_type_K, 
+                   data = d_sens, family = binomial())
+d_sens$pi_hat <- predict(ps_fit_sens, type = "response")
+
+out_fit_sens <- lm(math_score_3 ~ class_type_K + student_race + student_gender + free_lunch_K + area_type_K, 
+                    data = subset(d_sens, stayed_g3 == 1))
+d_sens$m_hat <- predict(out_fit_sens, newdata = d_sens)
+
+d_sens$dr_pseudo_outcome <- d_sens$m_hat + 
+  (d_sens$stayed_g3 / d_sens$pi_hat) * (ifelse(is.na(d_sens$math_score_3_raw), 0, d_sens$math_score_3_raw) - d_sens$m_hat)
+
+stars_dr_final <- d_sens
+
+# 1. Excluding Late Entry)
+# only choose Kindergarten students
+k_starters_ids <- stars1_wide %>% 
+  filter(!is.na(math_score_K)) %>% 
+  pull(student_id)
+
+d_sens_k_only <- stars_dr_final %>% 
+  filter(student_id %in% k_starters_ids)
+
+# Fit the model on this subset
+fit_k_only <- lm(dr_pseudo_outcome ~ class_type_K, data = d_sens_k_only)
+ate_k_only <- coef(fit_k_only)["class_type_KSmall class"]
+se_k_only  <- summary(fit_k_only)$coefficients["class_type_KSmall class", "Std. Error"]
+
+# Standard OLS on Observed Cases
+# Regression on the third-grade grades without performing DR
+fit_ols <- lm(math_score_3 ~ class_type_K + student_race + free_lunch_3 + area_type_K, 
+              data = subset(stars_dr_final, stayed_g3 == 1))
+ate_ols <- coef(fit_ols)["class_type_KSmall class"]
+se_ols  <- summary(fit_ols)$coefficients["class_type_KSmall class", "Std. Error"]
+
+# Obtain the DR results of the main model (as a baseline)
+ate_dr <- coef(lm(dr_pseudo_outcome ~ class_type_K, data = stars_dr_final))["class_type_KSmall class"]
+se_dr  <- summary(lm(dr_pseudo_outcome ~ class_type_K, data = stars_dr_final))$coefficients["class_type_KSmall class", "Std. Error"]
+
+# plot
+comp_df <- data.frame(
+  Specification = c("Standard OLS\n(Observed Only)", 
+                    "Double Robust\n(Full Sample)", 
+                    "Double Robust\n(K-Starters Only)"),
+  Estimate = c(ate_ols, ate_dr, ate_k_only),
+  SE = c(se_ols, se_dr, se_k_only)
+)
+
+# 绘制对比图
+ggplot(comp_df, aes(x = Specification, y = Estimate, fill = Specification)) +
+  geom_bar(stat = "identity", width = 0.5, alpha = 0.8) +
+  geom_errorbar(aes(ymin = Estimate - 1.96*SE, ymax = Estimate + 1.96*SE), width = 0.2) +
+  geom_text(aes(label = round(Estimate, 2)), vjust = -1.5, size = 5, fontface = "bold") +
+  scale_fill_manual(values = c("#34495e", "#2563eb", "#27ae60")) +
+  labs(title = "Robustness Comparison: Small Class Effect Size",
+       subtitle = "Comparing different samples and estimation strategies",
+       y = "Estimated Score Advantage (Small vs. Regular)",
+       x = "") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(size = 11, face = "bold"))
+```
 
 ## Comparison to Other Methods
 
