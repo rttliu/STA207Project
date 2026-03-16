@@ -2643,6 +2643,230 @@ window.onload = function() {
   PagedTableDoc.initAll();
 };
 </script>
+<script>$(document).ready(function(){
+    if (typeof $('[data-toggle="tooltip"]').tooltip === 'function') {
+        $('[data-toggle="tooltip"]').tooltip();
+    }
+    if ($('[data-toggle="popover"]').popover === 'function') {
+        $('[data-toggle="popover"]').popover();
+    }
+});
+</script>
+<style type="text/css">
+.lightable-minimal {
+border-collapse: separate;
+border-spacing: 16px 1px;
+width: 100%;
+margin-bottom: 10px;
+}
+.lightable-minimal td {
+margin-left: 5px;
+margin-right: 5px;
+}
+.lightable-minimal th {
+margin-left: 5px;
+margin-right: 5px;
+}
+.lightable-minimal thead tr:last-child th {
+border-bottom: 2px solid #00000050;
+empty-cells: hide;
+}
+.lightable-minimal tbody tr:first-child td {
+padding-top: 0.5em;
+}
+.lightable-minimal.lightable-hover tbody tr:hover {
+background-color: #f5f5f5;
+}
+.lightable-minimal.lightable-striped tbody tr:nth-child(even) {
+background-color: #f5f5f5;
+}
+.lightable-classic {
+border-top: 0.16em solid #111111;
+border-bottom: 0.16em solid #111111;
+width: 100%;
+margin-bottom: 10px;
+margin: 10px 5px;
+}
+.lightable-classic tfoot tr td {
+border: 0;
+}
+.lightable-classic tfoot tr:first-child td {
+border-top: 0.14em solid #111111;
+}
+.lightable-classic caption {
+color: #222222;
+}
+.lightable-classic td {
+padding-left: 5px;
+padding-right: 5px;
+color: #222222;
+}
+.lightable-classic th {
+padding-left: 5px;
+padding-right: 5px;
+font-weight: normal;
+color: #222222;
+}
+.lightable-classic thead tr:last-child th {
+border-bottom: 0.10em solid #111111;
+}
+.lightable-classic.lightable-hover tbody tr:hover {
+background-color: #F9EEC1;
+}
+.lightable-classic.lightable-striped tbody tr:nth-child(even) {
+background-color: #f5f5f5;
+}
+.lightable-classic-2 {
+border-top: 3px double #111111;
+border-bottom: 3px double #111111;
+width: 100%;
+margin-bottom: 10px;
+}
+.lightable-classic-2 tfoot tr td {
+border: 0;
+}
+.lightable-classic-2 tfoot tr:first-child td {
+border-top: 3px double #111111;
+}
+.lightable-classic-2 caption {
+color: #222222;
+}
+.lightable-classic-2 td {
+padding-left: 5px;
+padding-right: 5px;
+color: #222222;
+}
+.lightable-classic-2 th {
+padding-left: 5px;
+padding-right: 5px;
+font-weight: normal;
+color: #222222;
+}
+.lightable-classic-2 tbody tr:last-child td {
+border-bottom: 3px double #111111;
+}
+.lightable-classic-2 thead tr:last-child th {
+border-bottom: 1px solid #111111;
+}
+.lightable-classic-2.lightable-hover tbody tr:hover {
+background-color: #F9EEC1;
+}
+.lightable-classic-2.lightable-striped tbody tr:nth-child(even) {
+background-color: #f5f5f5;
+}
+.lightable-material {
+min-width: 100%;
+white-space: nowrap;
+table-layout: fixed;
+font-family: Roboto, sans-serif;
+border: 1px solid #EEE;
+border-collapse: collapse;
+margin-bottom: 10px;
+}
+.lightable-material tfoot tr td {
+border: 0;
+}
+.lightable-material tfoot tr:first-child td {
+border-top: 1px solid #EEE;
+}
+.lightable-material th {
+height: 56px;
+padding-left: 16px;
+padding-right: 16px;
+}
+.lightable-material td {
+height: 52px;
+padding-left: 16px;
+padding-right: 16px;
+border-top: 1px solid #eeeeee;
+}
+.lightable-material.lightable-hover tbody tr:hover {
+background-color: #f5f5f5;
+}
+.lightable-material.lightable-striped tbody tr:nth-child(even) {
+background-color: #f5f5f5;
+}
+.lightable-material.lightable-striped tbody td {
+border: 0;
+}
+.lightable-material.lightable-striped thead tr:last-child th {
+border-bottom: 1px solid #ddd;
+}
+.lightable-material-dark {
+min-width: 100%;
+white-space: nowrap;
+table-layout: fixed;
+font-family: Roboto, sans-serif;
+border: 1px solid #FFFFFF12;
+border-collapse: collapse;
+margin-bottom: 10px;
+background-color: #363640;
+}
+.lightable-material-dark tfoot tr td {
+border: 0;
+}
+.lightable-material-dark tfoot tr:first-child td {
+border-top: 1px solid #FFFFFF12;
+}
+.lightable-material-dark th {
+height: 56px;
+padding-left: 16px;
+padding-right: 16px;
+color: #FFFFFF60;
+}
+.lightable-material-dark td {
+height: 52px;
+padding-left: 16px;
+padding-right: 16px;
+color: #FFFFFF;
+border-top: 1px solid #FFFFFF12;
+}
+.lightable-material-dark.lightable-hover tbody tr:hover {
+background-color: #FFFFFF12;
+}
+.lightable-material-dark.lightable-striped tbody tr:nth-child(even) {
+background-color: #FFFFFF12;
+}
+.lightable-material-dark.lightable-striped tbody td {
+border: 0;
+}
+.lightable-material-dark.lightable-striped thead tr:last-child th {
+border-bottom: 1px solid #FFFFFF12;
+}
+.lightable-paper {
+width: 100%;
+margin-bottom: 10px;
+color: #444;
+}
+.lightable-paper tfoot tr td {
+border: 0;
+}
+.lightable-paper tfoot tr:first-child td {
+border-top: 1px solid #00000020;
+}
+.lightable-paper thead tr:last-child th {
+color: #666;
+vertical-align: bottom;
+border-bottom: 1px solid #00000020;
+line-height: 1.15em;
+padding: 10px 5px;
+}
+.lightable-paper td {
+vertical-align: middle;
+border-bottom: 1px solid #00000010;
+line-height: 1.15em;
+padding: 7px 5px;
+}
+.lightable-paper.lightable-hover tbody tr:hover {
+background-color: #F9EEC1;
+}
+.lightable-paper.lightable-striped tbody tr:nth-child(even) {
+background-color: #00000008;
+}
+.lightable-paper.lightable-striped tbody td {
+border: 0;
+}
+</style>
 
 <style type="text/css">
 code{white-space: pre-wrap;}
@@ -3022,19 +3246,22 @@ hr { border: none; border-top: 2px solid #e5e7eb; margin: 2em 0; }
 <div id="abstract" class="section level1" number="1">
 <h1><span class="header-section-number">1</span> Abstract</h1>
 <p>Understanding what we can do to ensure students’ academic success is
-highly important. While not all students’ backgrounds are the same, we
-can try our best to control for what factors we can to give them the
-best chance at succeeding. This report explores the sustained effects of
-class size reduction on third-grade academic achievement in the Project
-STAR experiment. To address the severe non-random attrition (Attrition)
-challenge in the later stages of the experiment, we adopted a framework
-that combines multiple interpolation (MICE) and doubly robust estimation
-(Doubly Robust Estimation). The analysis results show that after
+highly important. One potential factor to their success is class size.
+This report explores the longitudinal effects of small class sizes on
+academic achievement from kindergarten through third grade using data
+from the Tennessee Student/Teacher Achievement Ratio (STAR) project. To
+address the severe non-random attrition challenge in the later stages of
+the experiment, we adopted a framework that combines multiple
+interpolation (MICE) and doubly robust estimation. Our model itself is a
+mixed-effects model featuring both school and student level random
+intercepts to account for the clustered nature of the data. After
 correcting for attrition bias and controlling for relevant background
-variables, small class teaching (Small Class) has a significant causal
-gain of about 6.9 points on third-grade mathematics achievement.
-Sensitivity analysis confirmed the robustness of this conclusion under
-different missing mechanism assumptions.</p>
+variables, we find that the initial small class assignment in
+kindergarten has a significant causal gain of about 7.5 points on
+overall mathematics achievement. We also find that the advantage of
+small class assignment remains constant across all grades. Model
+diagnostics and sensitivity analyses indicate that this result remains
+robust.</p>
 </div>
 <div id="background-and-study-design" class="section level1" number="2">
 <h1><span class="header-section-number">2</span> Background and study
@@ -3064,56 +3291,32 @@ challenge for underserved schools or districts, and had become an
 important equity concern in education. For this reason, a question
 arises: <strong>whether the gains of small classes are worthy to justify
 the substantial costs of implementation</strong>. <span class="citation">(Schanzenbach 2007)</span></p>
-<p>Students were intended to stay in the same class-type assignment
-throughout the whole process. So the study was began with randomization,
-and all assignments was conducted within schools, the design helped
-balance school-level differences across treatment groups. This can be a
-good background for interpreting casual effects.</p>
-<p>Although STAR began with randomization, later studies have claimed
-that it is <strong>not a completely randomized experiments</strong>.
-Because the experiments are affected by factors such as student
-transfers, classroom reassignment, imperfect compliance, teacher
-changes, and missing follow-up data. When missing of the data is not at
+<p>Students ideally stayed in the same class-type assignment throughout
+the whole process. All assignments were conducted within schools, the
+design helped balance school-level differences across treatment groups.
+This can be a good background for interpreting casual effects as the
+study began with random assignment of treatment.</p>
+<p>Unfortunately, later studies have claimed that it is <strong>not a
+completely randomized experiments</strong>. Due to factors such as
+student transfers, classroom reassignment, imperfect compliance, teacher
+changes, and missing follow-up data, the initial randomization effect of
+the experiment may have been lost. When missing of the data is not at
 random, it can generate selection bias. Therefore, studies must address
 these post-randomization outcomes carefully.</p>
-<div id="some-empirical-complications-violating-randomization" class="section level2" number="2.1">
-<h2><span class="header-section-number">2.1</span> Some empirical
-complications violating randomization</h2>
+<div id="potential-emperical-complications-that-violate-randomization" class="section level2" number="2.1">
+<h2><span class="header-section-number">2.1</span> Potential Emperical
+Complications that Violate Randomization</h2>
 <ul>
-<li><strong>Student mobility / transfers.</strong></li>
+<li><p><strong>Student mobility / transfers.</strong> <span class="citation">Chetty et al. (2011)</span></p></li>
+<li><p><strong>Noncompliance with original assignment.</strong> <span class="citation">Krueger (1999a)</span></p></li>
+<li><p><strong>Teacher changes and classroom reshuffling.</strong> <span class="citation">Chetty et al. (2011)</span></p></li>
+<li><p><strong>Peer Effect.</strong> <span class="citation">Cascio and
+Schanzenbach (2007)</span></p></li>
 </ul>
-<p><span class="citation">Chetty et al. (2011)</span> claimed that some
-students did not remain in their originally assigned classrooms or
-schools over time, and new entrants were also added in later grades. As
-a result, treatment exposure in later grades may differ from the initial
-assignment.</p>
-<ul>
-<li><strong>Noncompliance with original assignment.</strong></li>
-</ul>
-<p><span class="citation">Krueger (1999a)</span> shown that some
-students moved between class types after the initial random assignment.
-Therefore, observed class type in later grades would not always be
-consistent with original treatment assignment.</p>
-<ul>
-<li><strong>Teacher changes and classroom reshuffling.</strong></li>
-</ul>
-<p><span class="citation">Chetty et al. (2011)</span> shown that if
-students were exposed to different classroom environments over time,
-including new teachers in subsequent grades and changes in class
-composition. These post-randomization changes may affect achievement
-independently of the original class-size assignment.</p>
-<ul>
-<li><strong>Peer Effect.</strong></li>
-</ul>
-<p><span class="citation">Cascio and Schanzenbach (2007)</span> argued
-that scores may depend also on the characteristics of classmates. Since
-classroom composition can affect learning outcomes, peer effects may
-operate alongside the direct effect of small classes and make
-interpretation of the treatment difficult.</p>
 </div>
-<div id="important-violations-of-randomization---selection-bias" class="section level2" number="2.2">
-<h2><span class="header-section-number">2.2</span> Important Violations
-of Randomization - Selection Bias</h2>
+<div id="potential-substantial-violation-of-randomization---selection-bias" class="section level2" number="2.2">
+<h2><span class="header-section-number">2.2</span> Potential Substantial
+Violation of Randomization - Selection Bias</h2>
 <p>One persistent concern of STAR Project is that there was substantial
 sample loss in the later years of the study, and this attrition may not
 have been entirely random. More broadly, <span class="citation">Hanushek
@@ -3152,58 +3355,18 @@ differential attrition and movement across class types.</p>
 </div>
 <div id="research-questions" class="section level1" number="3">
 <h1><span class="header-section-number">3</span> Research Questions</h1>
-<div id="assumptions" class="section level2" number="3.1">
-<h2><span class="header-section-number">3.1</span> Assumptions</h2>
-<ul>
-<li><strong>Stable Unit Treatment Value Assumption
-(SUTVA):</strong></li>
-</ul>
-<p>A first assumption is no interference. Each classroom’s potential
-outcome is assumed to be independent of the treatment assigned to other
-classrooms. The second assumption is no hidden versions of treatment.
-Small class should not contain multiple hidden versions of
-treatment.</p>
-<ul>
-<li><strong>Positivity:</strong></li>
-</ul>
-<p>Within the relevant strata of background characteristics such as
-grade, race, free lunch status, and school context, there should be
-sufficient overlap so that no subgroup is deterministically assigned to
-only one class type.</p>
-<ul>
-<li><strong>Conditional ignorability of attrition:</strong></li>
-</ul>
-<p>Conditional on the observed baseline covariates, treatment status,
-prior achievement, and other auxiliary variables related to student
-performance and participation, whether a student remains observed is
-assumed to be independent of the missing potential math outcomes.</p>
-<ul>
-<li><strong>Random assignment at baseline:</strong></li>
-</ul>
-<p>At study entry, students were randomly assigned within schools to
-class types, so baseline treatment assignment can be treated as
-independent of students’ pre-treatment characteristics and potential
-outcomes.</p>
-<ul>
-<li><strong>Exclusive Restriction:</strong></li>
-</ul>
-<p>Conditional on the class type actually received, the original random
-assignment affects math achievement only through treatment receipt, not
-through any direct channel such as parental responses, administrative
-reassignment, compliance behavior, etc.</p>
-</div>
-<div id="questions-of-interests" class="section level2" number="3.2">
-<h2><span class="header-section-number">3.2</span> Questions of
+<div id="questions-of-interests" class="section level2" number="3.1">
+<h2><span class="header-section-number">3.1</span> Questions of
 Interests</h2>
 <p>Our main question of interest is</p>
 <p>Do students who are assigned to smaller classes achieve higher
 mathematics scores than those in regular classes? If so, does this
-relationship differ across grades K-3?</p>
+advantage persist across grades K-3?</p>
 <p>We seek to answer these questions because we want to know whether or
 not these class assignments truly help students with their academic
-success. If it does, then we want to know if it persists throughout
-grades, therefore letting schools know that it is worth their time and
-resources to allocate for these smaller class sizes.</p>
+success. If it does, then we want to know if its effects persist
+throughout grades, therefore letting schools know that it is worth their
+time and resources to allocate for these smaller class sizes.</p>
 </div>
 </div>
 <div id="exploratory-data-analysis" class="section level1" number="4">
@@ -3219,7 +3382,8 @@ of missing data, it is necessary to retain only variables relevant to
 the analysis. To address missing data, we will first assume that the
 data is MAR and apply imputation methods to estimate our missing values.
 We will later check the validity of these assumptions and whether or not
-they hold.</p>
+they hold. In addition, we also converted the data to longitudinal
+data.</p>
 <div data-pagedtable="false">
 <script data-pagedtable-source type="application/json">
 {"columns":[{"label":["variables"],"name":[1],"type":["chr"],"align":["left"]},{"label":["levels"],"name":[2],"type":["chr"],"align":["left"]},{"label":["N"],"name":[3],"type":["int"],"align":["right"]},{"label":["freq"],"name":[4],"type":["int"],"align":["right"]},{"label":["ratio"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["rank"],"name":[6],"type":["int"],"align":["right"]}],"data":[{"1":"student_gender","2":"1","3":"25013","4":"12957","5":"51.80106345","6":"1"},{"1":"student_gender","2":"2","3":"25013","4":"12056","5":"48.19893655","6":"2"},{"1":"student_race","2":"1","3":"25013","4":"16648","5":"66.55739016","6":"1"},{"1":"student_race","2":"2","3":"25013","4":"8221","5":"32.86690921","6":"2"},{"1":"student_race","2":"3","3":"25013","4":"63","5":"0.25186903","6":"3"},{"1":"student_race","2":"6","3":"25013","4":"35","5":"0.13992724","6":"4"},{"1":"student_race","2":"4","3":"25013","4":"33","5":"0.13193140","6":"5"},{"1":"student_race","2":"5","3":"25013","4":"13","5":"0.05197297","6":"6"},{"1":"grade","2":"1","3":"25013","4":"6583","5":"26.31831448","6":"1"},{"1":"grade","2":"3","3":"25013","4":"6442","5":"25.75460760","6":"2"},{"1":"grade","2":"2","3":"25013","4":"6304","5":"25.20289449","6":"3"},{"1":"grade","2":"K","3":"25013","4":"5684","5":"22.72418342","6":"4"},{"1":"class_type","2":"3","3":"25013","4":"8938","5":"35.73341862","6":"1"},{"1":"class_type","2":"2","3":"25013","4":"8543","5":"34.15423980","6":"2"},{"1":"class_type","2":"1","3":"25013","4":"7532","5":"30.11234158","6":"3"},{"1":"area_type","2":"3","3":"25013","4":"11900","5":"47.57526086","6":"1"},{"1":"area_type","2":"2","3":"25013","4":"5930","5":"23.70767201","6":"2"},{"1":"area_type","2":"1","3":"25013","4":"5228","5":"20.90113141","6":"3"},{"1":"area_type","2":"4","3":"25013","4":"1955","5":"7.81593571","6":"4"},{"1":"teacher_gender","2":"2","3":"25013","4":"24695","5":"98.72866110","6":"1"},{"1":"teacher_gender","2":"1","3":"25013","4":"318","5":"1.27133890","6":"2"},{"1":"teacher_race","2":"1","3":"25013","4":"20332","5":"81.28573142","6":"1"},{"1":"teacher_race","2":"2","3":"25013","4":"4667","5":"18.65829769","6":"2"},{"1":"teacher_race","2":"3","3":"25013","4":"14","5":"0.05597090","6":"3"},{"1":"teacher_degree","2":"2","3":"25013","4":"15321","5":"61.25214888","6":"1"},{"1":"teacher_degree","2":"3","3":"25013","4":"9242","5":"36.94878663","6":"2"},{"1":"teacher_degree","2":"5","3":"25013","4":"233","5":"0.93151561","6":"3"},{"1":"teacher_degree","2":"4","3":"25013","4":"160","5":"0.63966737","6":"4"},{"1":"teacher_degree","2":"6","3":"25013","4":"57","5":"0.22788150","6":"5"},{"1":"teacher_career","2":"4","3":"25013","4":"17657","5":"70.59129253","6":"1"},{"1":"teacher_career","2":"2","3":"25013","4":"1992","5":"7.96385879","6":"2"},{"1":"teacher_career","2":"3","3":"25013","4":"1871","5":"7.48011034","6":"3"},{"1":"teacher_career","2":"1","3":"25013","4":"1686","5":"6.74049494","6":"4"},{"1":"teacher_career","2":"6","3":"25013","4":"943","5":"3.77003958","6":"5"},{"1":"teacher_career","2":"5","3":"25013","4":"827","5":"3.30628073","6":"6"},{"1":"teacher_career","2":"7","3":"25013","4":"37","5":"0.14792308","6":"7"},{"1":"free_lunch","2":"2","3":"25013","4":"12507","5":"50.00199896","6":"1"},{"1":"free_lunch","2":"1","3":"25013","4":"12506","5":"49.99800104","6":"2"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
@@ -3235,7 +3399,9 @@ Master or above, because specialist and doctoral categories were
 infrequent relative to the dominant bachelor’s/master’s groups. Teacher
 career stage was also collapsed into Lower level and Upper level, since
 the original multi-level ladder structure was highly imbalanced in
-practice.</p>
+practice. We also combined regular class and regular class with aide to
+just regular class since we were interested only in the effects of class
+size.</p>
 </div>
 <div id="identification-of-potential-confounder" class="section level2" number="4.2">
 <h2><span class="header-section-number">4.2</span> Identification of
@@ -3277,9 +3443,9 @@ with math achievement.</li>
 Y\)</span>:</strong> whether background characteristics are related to
 classroom assignment.</li>
 </ul>
-<p>If these relationships hold, failing to control for <span class="math inline">\(Z\)</span> may bias estimates of the effect of
-class size on student outcomes. Therefore, these variables are included
-as controls in the subsequent analysis.</p>
+<p>If these relationships hold, failing to control for <span class="math inline">\(Z\)</span> may cause bias in the estimates of the
+effect of class size on student outcomes. Therefore, these variables are
+included as controls in the subsequent analysis.</p>
 <div id="verify-x-rightarrow-y" class="section level3" number="4.2.1">
 <h3><span class="header-section-number">4.2.1</span> Verify
 <strong><span class="math inline">\(X \rightarrow
@@ -3307,10 +3473,10 @@ Kruskal–Wallis test to evaluate whether math scores differ across
 groups. Unlike the ANOVA, Kruskal–Wallis it is a nonparametric method
 based on ranks, which means that there are no normality assumption of
 data.</p>
-<p>The null hypothesis of Kruskal–Wallis is that the distributions of
-math scores are the same across all groups; equivalently, under a
-common-shape assumption, the group medians are equal. The alternative
-hypothesis is that at least one group differs from the others.</p>
+<p>The null hypothesis is that the distributions of math scores are the
+same across all groups; equivalently, under a common-shape assumption,
+the group medians are equal. The alternative hypothesis is that at least
+one group differs from the others.</p>
 <p>Because multiple tests are conducted across several covariates, we
 adopt a significance threshold of <span class="math inline">\(\alpha
 =0.001\)</span> to reduce the risk of false positives arising from
@@ -4391,12 +4557,16 @@ cross-validation for imputation quality</h2>
 </div>
 <div id="discussion" class="section level1" number="8">
 <h1><span class="header-section-number">8</span> Discussion</h1>
-<div id="limitations" class="section level2" number="8.1">
-<h2><span class="header-section-number">8.1</span> Limitations</h2>
+<div id="interpretation-of-results" class="section level2" number="8.1">
+<h2><span class="header-section-number">8.1</span> Interpretation of
+Results</h2>
+</div>
+<div id="limitations" class="section level2" number="8.2">
+<h2><span class="header-section-number">8.2</span> Limitations</h2>
 <p>Despite our best efforts to make our model as rigorous as possible,
 there are still some limitations within our study.</p>
-<div id="reliance-on-mar-assumption" class="section level3" number="8.1.1">
-<h3><span class="header-section-number">8.1.1</span> Reliance on MAR
+<div id="reliance-on-mar-assumption" class="section level3" number="8.2.1">
+<h3><span class="header-section-number">8.2.1</span> Reliance on MAR
 assumption</h3>
 <p>Our work heavily relies on the data to be Missing At Random. If in
 reality we do not have MAR, we would have majorly biased results.
@@ -4405,8 +4575,8 @@ cannot rule out the case of MNAR with complete certainty. If unobserved
 values do in fact influence attrition, we would have a very biased
 model.</p>
 </div>
-<div id="additional-potential-unobserved-confounders" class="section level3" number="8.1.2">
-<h3><span class="header-section-number">8.1.2</span> Additional
+<div id="additional-potential-unobserved-confounders" class="section level3" number="8.2.2">
+<h3><span class="header-section-number">8.2.2</span> Additional
 Potential Unobserved Confounders</h3>
 <p>As extensive as the details of the STAR database is, there are still
 potential unobserved confounders lurking within the data. For example,
@@ -4417,13 +4587,761 @@ student to consult with in regards with schoolwork. Thus, this would be
 a potential confounder as it affects both the treatment assignment of
 class type and the response of math score.</p>
 </div>
+<div id="academic-achievement" class="section level3" number="8.2.3">
+<h3><span class="header-section-number">8.2.3</span> Academic
+Achievement</h3>
+<p>While math score is a key indicator of academic achievement, it is
+not the only one. Other indicators of academic achievement include</p>
+</div>
 </div>
 </div>
 <div id="conclusion" class="section level1" number="9">
 <h1><span class="header-section-number">9</span> Conclusion</h1>
+<p>After adjusting for potential confounders and addressing missing data
+issues via imputation methods, we conclude that there is a difference
+between</p>
 </div>
-<div id="references" class="section level1 unnumbered">
-<h1 class="unnumbered">References</h1>
+<div id="references" class="section level1" number="10">
+<h1><span class="header-section-number">10</span> References</h1>
+</div>
+<div id="appendix-a---imputation-methodology" class="section level1" number="11">
+<h1><span class="header-section-number">11</span> Appendix A -
+Imputation Methodology</h1>
+<p>For several variables that are regarded as time-invariant or
+relatively stable over time such as gender and race/ethnicity, we
+applied the Last Observation Carried Forward (LOCF) approach. This works
+by replacing the most recent previously observed value for the same
+student when the value was missing at a later wave.</p>
+<div id="introduction-of-key-methods" class="section level2" number="11.1">
+<h2><span class="header-section-number">11.1</span> Introduction of Key
+Methods</h2>
+<p>Because our dataset contains a substantial proportion of incomplete
+cases across various waves, relying solely on complete-case analysis
+(IPW) would lead to severe information loss and biased estimates.
+Therefore, <strong>we employ a rigorous two-step hybrid approach
+combining Multiple Imputation by Chained Equations (MICE) and Augmented
+Inverse Probability Weighting (AIPW).</strong> First, we utilize MICE to
+address the <strong>sheer volume of incomplete cases</strong> by MICE.
+Second, because individual <strong>student trajectories can be highly
+sparse over time</strong>, we apply AIPW in the subsequent analysis
+phase. AIPW could be a correction for any residual bias caused by the
+sparsity of individual math trajectories and potential misspecifications
+during the MICE step.</p>
+<div id="mice-multiple-imputation-by-chained-equations" class="section level3" number="11.1.1">
+<h3><span class="header-section-number">11.1.1</span> MICE (Multiple
+Imputation by Chained Equations)</h3>
+<p><strong>1. The Chained Equations (Conditional Imputation
+Models)</strong></p>
+<p>Let <span class="math inline">\(V = (Y, X, Z, A)\)</span> represent
+the full set of variables in our dataset, where <span class="math inline">\(V_j\)</span> denotes the <span class="math inline">\(j\)</span>-th variable and <span class="math inline">\(V_{-j}\)</span> denotes all variables except <span class="math inline">\(V_j\)</span>. The MICE algorithm operates by
+drawing missing values from a sequence of conditional distributions. For
+an iteration <span class="math inline">\(t\)</span>, the missing values
+of variable <span class="math inline">\(V_j\)</span>, denoted as <span class="math inline">\(V_{j, mis}\)</span>, are drawn from the
+conditional distribution given the observed values <span class="math inline">\(V_{j, obs}\)</span> and the currently imputed
+values of all other variables:</p>
+<p><span class="math display">\[
+V_{j, mis}^{(t)} \sim P(V_j \mid V_1^{(t)}, \dots, V_{j-1}^{(t)},
+V_{j+1}^{(t-1)}, \dots, V_p^{(t-1)}, \theta_j^{(t)})
+\]</span></p>
+<p>where <span class="math inline">\(\theta_j^{(t)}\)</span> is a vector
+of parameters specific to the conditional model for variable <span class="math inline">\(V_j\)</span> at iteration <span class="math inline">\(t\)</span>.</p>
+<p><strong>2. Specific Models for Key Variables</strong></p>
+<p>Because our dataset contains a mix of continuous and categorical
+variables with varying distributions, we assign specific conditional
+models to different variable types:</p>
+<ul>
+<li><strong>Continuous Variables</strong> For students’ class size and
+teaching years, we utilize <strong>Predictive Mean Matching
+(PMM)</strong>. PMM is a semi-parametric approach that relaxes the
+assumption of normality. For a student <span class="math inline">\(i\)</span> with a missing math score <span class="math inline">\(Y_i\)</span>, PMM first estimates a predictive
+linear model:</li>
+</ul>
+<p><span class="math display">\[
+\hat{A}_{-i} = \beta_0 + \beta_X X_i + \beta_Z Z_i + \beta_A A_i
+\]</span></p>
+<ul>
+<li><strong>Categorical Variables (<span class="math inline">\(X\)</span> and <span class="math inline">\(Z\)</span>):</strong> For categorical baseline
+characteristics with missing values (e.g., <span class="math inline">\(Z\)</span>: <code>free_lunch</code>,
+<code>student_race</code>, <code>area_type</code>), we employ
+generalized linear models. For instance, if <span class="math inline">\(Z_k\)</span> is a binary precision variable (e.g.,
+<code>free_lunch</code>), we use logistic regression:</li>
+</ul>
+<p><span class="math display">\[
+\text{logit}(P(Z_{k, i} = 1 \mid V_{-Z_k, i})) = \alpha_0 + \alpha^T
+V_{-Z_k, i}
+\]</span></p>
+<p>For categorical variables with more than two levels, multinomial
+logistic regression is applied.</p>
+<p><strong>3. Imputation Parameters</strong></p>
+<p>To adequately capture the uncertainty surrounding the missing data
+and the highly sparse regions of student performance, we set the number
+of multiple imputations to <span class="math inline">\(m = 20\)</span>,
+generating 20 distinct, complete datasets. For each dataset, the chained
+equations run for <span class="math inline">\(maxit = 10\)</span>
+iterations to allow the conditional distributions to reach convergence,
+which will be verified visually via trace plots.</p>
+<p><strong>4. Assumptions</strong></p>
+<p>The validity of Multiple Imputation by Chained Equations (MICE)
+relies on several key statistical assumptions. Based on our previous
+diagnostic analyses, we align our imputation strategy with the following
+assumptions:</p>
+<ul>
+<li><strong>Missing at Random (MAR):</strong> We previously rejected the
+strict MCAR assumption, showing that missingness is tied to baseline
+traits. By including these precision variables and strong auxiliary
+predictors in the imputation model, we largely explain the missingness
+mechanism, making the MAR assumption highly plausible.</li>
+<li><strong>Correct Model Specification:</strong> To satisfy this, our
+predictor matrix incorporates the treatment variables (<span class="math inline">\(X\)</span>), the outcome (<span class="math inline">\(Y\)</span>), their interaction (class type <span class="math inline">\(\times\)</span> grade), and all identified
+precision (<span class="math inline">\(Z\)</span>) and auxiliary (<span class="math inline">\(A\)</span>) variables.</li>
+<li><strong>Ignorability:</strong> Our rich set of covariates
+sufficiently accounts for systematic differences between complete and
+incomplete cases, we can rely on the conditional distributions estimated
+by MICE without explicitly modeling the dropout probability.</li>
+<li><strong>Compatibility of Conditional Distributions:</strong> The
+sequence of conditional univariate models must be mutually compatible to
+converge to a valid stationary multivariate distribution. By utilizing
+standard generalized linear models, our MICE setup behaves robustly and
+satisfies the practical requirements of compatibility and
+convergence.</li>
+</ul>
+</div>
+<div id="aipw-augmented-inverse-probability-weighting" class="section level3" number="11.1.2">
+<h3><span class="header-section-number">11.1.2</span> AIPW (Augmented
+Inverse Probability Weighting)</h3>
+<p>While MICE focuses on recovering missing values in the dataset based
+on observed patterns, AIPW operates at the causal estimation phase. It
+does not impute missing values to create a new dataset; rather, it
+“imputes” the unobserved potential outcomes mathematically to estimate
+the Average Treatment Effect (ATE). It achieves this by modeling both
+the probability of treatment assignment and the expected outcome.</p>
+<p><strong>1. The Estimation and Correction Process</strong></p>
+<p>Let the treatment assignment <span class="math inline">\(X \in \{0,
+1\}\)</span> denote the class type a student was assigned to, where
+<span class="math inline">\(X=1\)</span> represents assignment to a
+Small Class (the treatment) and <span class="math inline">\(X=0\)</span>
+represents assignment to a Regular Class (the control). The AIPW
+estimation on the imputed datasets proceeds in three steps:</p>
+<p>Firstly, we model the probability of a student receiving the
+treatment given their covariates, known as the propensity score: <span class="math inline">\(\pi(Z_i) = P(X_i = 1 \mid Z_i)\)</span>. We use
+logistic regression to estimate <span class="math inline">\(\hat{\pi}(Z_i)\)</span>. Inverse Probability
+Weighting (IPW) uses these scores to create a pseudo-population where
+treatment assignment is independent of measured confounders.</p>
+<p>Next, we model the expected math score given the treatment and
+covariates: <span class="math inline">\(\mu_x(Z_i) = E[Y_i \mid X_i = x,
+Z_i]\)</span>. We fit regression models (or machine learning algorithms)
+to obtain the predicted expected outcomes <span class="math inline">\(\hat{\mu}_1(Z_i)\)</span> (if treated) and <span class="math inline">\(\hat{\mu}_0(Z_i)\)</span> (if control) for every
+student.</p>
+<p>AIPW estimates the counterfactual mean for treatment <span class="math inline">\(x\)</span> by augmenting the IPW estimator with
+predictions from the outcome model. The estimator for the expected
+potential outcome under treatment <span class="math inline">\(X=1\)</span> is constructed as:</p>
+<p><span class="math display">\[
+\hat{E}[Y^{(1)}] = \frac{1}{N} \sum_{i=1}^N \left[ \hat{\mu}_1(Z_i) +
+\frac{X_i}{\hat{\pi}(Z_i)} (Y_i - \hat{\mu}_1(Z_i)) \right]
+\]</span></p>
+<p>This formula elegantly corrects predictions: if the outcome model
+<span class="math inline">\(\hat{\mu}_1(Z_i)\)</span> makes an error
+(the residual <span class="math inline">\(Y_i -
+\hat{\mu}_1(Z_i)\)</span>), it is scaled by the inverse probability
+weight to adjust for the bias. The Average Treatment Effect (ATE) is
+simply the difference between the AIPW estimates for treatment and
+control: <span class="math inline">\(\hat{ATE} = \hat{E}[Y^{(1)}] -
+\hat{E}[Y^{(0)}]\)</span>.</p>
+<p><strong>2. Defending Our Causal Assumptions</strong></p>
+<p>By employing this doubly robust estimator, we directly operationalize
+and safeguard the core causal assumptions established earlier in our
+methodology:</p>
+<ul>
+<li><strong>Safeguarding Positivity in Sparse Data:</strong> As outlined
+in our assumptions, sufficient overlap (<strong>Positivity</strong>) is
+required across all strata.</li>
+<li><strong>Fortifying Conditional Ignorability:</strong> Residual
+misspecification may still exist due to non-normality. AIPW offers a
+crucial “double-check” mechanism: it yields consistent and unbiased
+treatment effect estimates as long as <em>at least one</em> of the two
+models—either the outcome model or the propensity model—is correctly
+specified.</li>
+</ul>
+</div>
+</div>
+<div id="imputations" class="section level2" number="11.2">
+<h2><span class="header-section-number">11.2</span> Imputations</h2>
+<div id="convergence-check-of-mice" class="section level3" number="11.2.1">
+<h3><span class="header-section-number">11.2.1</span> Convergence check
+of MICE</h3>
+<p>To assess the convergence and stability of the multiple imputation
+procedure. For each category of each time-varying categorical variable,
+we calculated the average proportion across the 20 imputed datasets, as
+well as the range (minimum–maximum) of the proportions across
+imputations. This helps evaluate whether the imputation model produces
+consistent distributions across completed datasets. Narrow ranges and
+similar average proportions indicate good stability of the MICE.</p>
+<table class="table table-striped table-hover table-condensed" style="width: auto !important; margin-left: auto; margin-right: auto;">
+<caption>
+Convergence Checking for Time-Varying Categorical Variables Across 20
+Imputed Sets
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;">
+variable_label
+</th>
+<th style="text-align:left;">
+category
+</th>
+<th style="text-align:center;">
+Grade 1
+</th>
+<th style="text-align:center;">
+Grade 2
+</th>
+<th style="text-align:center;">
+Grade 3
+</th>
+<th style="text-align:center;">
+K
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;vertical-align: top !important;" rowspan="2">
+Class Type
+</td>
+<td style="text-align:left;">
+Regular
+</td>
+<td style="text-align:center;">
+0.732 (0.730, 0.734)
+</td>
+<td style="text-align:center;">
+0.709 (0.706, 0.713)
+</td>
+<td style="text-align:center;">
+0.684 (0.678, 0.689)
+</td>
+<td style="text-align:center;">
+0.743 (0.739, 0.749)
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Small class
+</td>
+<td style="text-align:center;">
+0.268 (0.266, 0.270)
+</td>
+<td style="text-align:center;">
+0.291 (0.287, 0.294)
+</td>
+<td style="text-align:center;">
+0.316 (0.311, 0.322)
+</td>
+<td style="text-align:center;">
+0.257 (0.251, 0.261)
+</td>
+</tr>
+<tr>
+<td style="text-align:left;vertical-align: top !important;" rowspan="2">
+Free Lunch Status
+</td>
+<td style="text-align:left;">
+Free lunch
+</td>
+<td style="text-align:center;">
+0.552 (0.547, 0.555)
+</td>
+<td style="text-align:center;">
+0.552 (0.546, 0.558)
+</td>
+<td style="text-align:center;">
+0.549 (0.545, 0.553)
+</td>
+<td style="text-align:center;">
+0.538 (0.529, 0.546)
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Non-free lunch
+</td>
+<td style="text-align:center;">
+0.448 (0.445, 0.453)
+</td>
+<td style="text-align:center;">
+0.448 (0.442, 0.454)
+</td>
+<td style="text-align:center;">
+0.451 (0.447, 0.455)
+</td>
+<td style="text-align:center;">
+0.462 (0.454, 0.471)
+</td>
+</tr>
+<tr>
+<td style="text-align:left;vertical-align: top !important;" rowspan="2">
+Teacher Career Level
+</td>
+<td style="text-align:left;">
+Lower level
+</td>
+<td style="text-align:center;">
+0.301 (0.295, 0.306)
+</td>
+<td style="text-align:center;">
+0.247 (0.241, 0.253)
+</td>
+<td style="text-align:center;">
+0.203 (0.196, 0.210)
+</td>
+<td style="text-align:center;">
+0.172 (0.163, 0.180)
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Upper level
+</td>
+<td style="text-align:center;">
+0.699 (0.694, 0.705)
+</td>
+<td style="text-align:center;">
+0.753 (0.747, 0.759)
+</td>
+<td style="text-align:center;">
+0.797 (0.790, 0.804)
+</td>
+<td style="text-align:center;">
+0.828 (0.820, 0.837)
+</td>
+</tr>
+<tr>
+<td style="text-align:left;vertical-align: top !important;" rowspan="2">
+Teacher Degree
+</td>
+<td style="text-align:left;">
+Below Master
+</td>
+<td style="text-align:center;">
+0.659 (0.650, 0.664)
+</td>
+<td style="text-align:center;">
+0.624 (0.616, 0.630)
+</td>
+<td style="text-align:center;">
+0.557 (0.551, 0.563)
+</td>
+<td style="text-align:center;">
+0.661 (0.651, 0.669)
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Master or above
+</td>
+<td style="text-align:center;">
+0.341 (0.336, 0.350)
+</td>
+<td style="text-align:center;">
+0.376 (0.370, 0.384)
+</td>
+<td style="text-align:center;">
+0.443 (0.437, 0.449)
+</td>
+<td style="text-align:center;">
+0.339 (0.331, 0.349)
+</td>
+</tr>
+<tr>
+<td style="text-align:left;vertical-align: top !important;" rowspan="2">
+Teacher Race
+</td>
+<td style="text-align:left;">
+Black
+</td>
+<td style="text-align:center;">
+0.197 (0.193, 0.203)
+</td>
+<td style="text-align:center;">
+0.220 (0.212, 0.244)
+</td>
+<td style="text-align:center;">
+0.237 (0.231, 0.243)
+</td>
+<td style="text-align:center;">
+0.173 (0.164, 0.179)
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Non-Black
+</td>
+<td style="text-align:center;">
+0.803 (0.797, 0.807)
+</td>
+<td style="text-align:center;">
+0.780 (0.756, 0.788)
+</td>
+<td style="text-align:center;">
+0.763 (0.757, 0.769)
+</td>
+<td style="text-align:center;">
+0.827 (0.821, 0.836)
+</td>
+</tr>
+</tbody>
+</table>
+<p>As shown in the table, the estimated proportions are highly stable
+across imputations. The ranges across imputations are very narrow for
+all categories and waves, typically differing by less than 0.02. For
+example, the proportion of students in regular classes ranges from 0.722
+to 0.733 in Grade 1 and from 0.668 to 0.682 in Grade 3. Similar
+stability is observed for other variables, including free lunch status,
+teacher career level, teacher degree, and teacher race. Overall, the
+small variation across imputations indicates that the imputation
+algorithm converged well and produced consistent estimates across the
+multiple imputed datasets.</p>
+</div>
+<div id="stability-of-aipw" class="section level3" number="11.2.2">
+<h3><span class="header-section-number">11.2.2</span> Stability of
+AIPW</h3>
+<p>To assess the stability of the inverse probability weighting
+procedure, we examined the distribution of the estimated propensity
+scores and the corresponding IPW weights across the imputed datasets.
+For each completed dataset, propensity scores for remaining in the study
+through Grade 3 were estimated using baseline covariates, including
+student race, gender, birth year, free lunch status at kindergarten, and
+school area type. IPW weights were then constructed as the inverse of
+the estimated propensity score for students who remained in the
+study.</p>
+<p><strong>1. Distribution of Propensity Scores and AIPW
+Weights</strong></p>
+<p>We examined the distributions of the estimated propensity scores and
+AIPW weights to assess whether the weighting procedure was stable.
+Adequate overlap and the absence of extreme weights suggest that the
+resulting AIPW estimates are reliable and not unduly influenced by a
+small number of observations.</p>
+<table class="table table-striped table-hover table-condensed" style="width: auto !important; margin-left: auto; margin-right: auto;">
+<caption>
+Distribution of Propensity Scores and AIPW Weights
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;">
+Statistic
+</th>
+<th style="text-align:center;">
+Propensity.Score
+</th>
+<th style="text-align:center;">
+AIPW.Weight
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+Mean
+</td>
+<td style="text-align:center;">
+0.540
+</td>
+<td style="text-align:center;">
+1.909
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Standard deviation
+</td>
+<td style="text-align:center;">
+0.091
+</td>
+<td style="text-align:center;">
+0.338
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Minimum
+</td>
+<td style="text-align:center;">
+0.281
+</td>
+<td style="text-align:center;">
+1.257
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1st percentile
+</td>
+<td style="text-align:center;">
+0.357
+</td>
+<td style="text-align:center;">
+1.420
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+5th percentile
+</td>
+<td style="text-align:center;">
+0.397
+</td>
+<td style="text-align:center;">
+1.452
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Median
+</td>
+<td style="text-align:center;">
+0.527
+</td>
+<td style="text-align:center;">
+1.897
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+75th percentile
+</td>
+<td style="text-align:center;">
+0.613
+</td>
+<td style="text-align:center;">
+2.146
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+95th percentile
+</td>
+<td style="text-align:center;">
+0.689
+</td>
+<td style="text-align:center;">
+2.521
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+99th percentile
+</td>
+<td style="text-align:center;">
+0.704
+</td>
+<td style="text-align:center;">
+2.802
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Maximum
+</td>
+<td style="text-align:center;">
+0.796
+</td>
+<td style="text-align:center;">
+3.554
+</td>
+</tr>
+</tbody>
+</table>
+<p>The table summarizes the distribution of the estimated propensity
+scores and IPW weights. The propensity scores had a mean of 0.54 (SD =
+0.09) and ranged from 0.33 to 0.78, indicating that the overlap
+assumption has been statisfied across observations. The resulting IPW
+weights were well behaved, with a mean of 1.91 (SD = 0.35), a median of
+1.90, and a maximum of 3.08. There are no extremely large weights, so
+the weighted data is unlikely to be driven by a small number of
+observations. Overall, positivity assumption was reasonably satisfied,
+there was no evidence of extreme weighting, and the subsequent AIPW
+estimation was likely to be stable.</p>
+<p><strong>2. Covariate Balance Before and After Weighting</strong></p>
+<p>Standardized mean differences (SMDs) were examined before and after
+weighting to assess whether IPW improved covariate balance between
+treatment groups. Because IPW aims to reduce confounding by creating a
+weighted pseudo-population with similar observed covariate distributions
+across groups, balance diagnostics provide an important check on whether
+the weighting procedure performed as intended.</p>
+<table class="table table-striped table-hover table-condensed" style="width: auto !important; margin-left: auto; margin-right: auto;">
+<caption>
+Standardized Mean Differences Before and After Weighting
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;">
+Covariate
+</th>
+<th style="text-align:center;">
+Unweighted SMD Mean
+</th>
+<th style="text-align:center;">
+Unweighted SMD Range
+</th>
+<th style="text-align:center;">
+Weighted SMD Mean
+</th>
+<th style="text-align:center;">
+Weighted SMD Range
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+Birth year
+</td>
+<td style="text-align:center;">
+0.101
+</td>
+<td style="text-align:center;">
+0.098-0.104
+</td>
+<td style="text-align:center;">
+0.005
+</td>
+<td style="text-align:center;">
+0.004-0.007
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Student race
+</td>
+<td style="text-align:center;">
+0.071
+</td>
+<td style="text-align:center;">
+0.069-0.072
+</td>
+<td style="text-align:center;">
+0.001
+</td>
+<td style="text-align:center;">
+0.001-0.001
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Area type:Inner City
+</td>
+<td style="text-align:center;">
+0.067
+</td>
+<td style="text-align:center;">
+0.059-0.077
+</td>
+<td style="text-align:center;">
+0.001
+</td>
+<td style="text-align:center;">
+0.000-0.001
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Free lunch
+</td>
+<td style="text-align:center;">
+0.128
+</td>
+<td style="text-align:center;">
+0.121-0.136
+</td>
+<td style="text-align:center;">
+0.000
+</td>
+<td style="text-align:center;">
+0.000-0.001
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Area type:Rural
+</td>
+<td style="text-align:center;">
+0.115
+</td>
+<td style="text-align:center;">
+0.106-0.122
+</td>
+<td style="text-align:center;">
+0.000
+</td>
+<td style="text-align:center;">
+0.000-0.001
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Student gender
+</td>
+<td style="text-align:center;">
+0.031
+</td>
+<td style="text-align:center;">
+0.031-0.032
+</td>
+<td style="text-align:center;">
+0.000
+</td>
+<td style="text-align:center;">
+0.000-0.001
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Area type:Suburban
+</td>
+<td style="text-align:center;">
+0.029
+</td>
+<td style="text-align:center;">
+0.023-0.039
+</td>
+<td style="text-align:center;">
+0.000
+</td>
+<td style="text-align:center;">
+0.000-0.000
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Area type:Urban
+</td>
+<td style="text-align:center;">
+0.019
+</td>
+<td style="text-align:center;">
+0.012-0.025
+</td>
+<td style="text-align:center;">
+0.000
+</td>
+<td style="text-align:center;">
+0.000-0.000
+</td>
+</tr>
+</tbody>
+</table>
+<p>The table summarizes the standardized mean differences (SMDs) of
+baseline covariates before and after weighting. Before weighting,
+several covariates showed moderate imbalance, with SMDs ranging from
+0.015 to 0.129. After applying the weights, all covariates exhibited
+near-zero SMDs (0.000–0.005), and the ranges across imputed datasets
+were minimal. This indicates that the weighting procedure successfully
+achieved good covariate balance between the treatment groups.</p>
+</div>
+</div>
+</div>
+<div id="appendix-2---code-for-reproducibility" class="section level1 unnumbered">
+<h1 class="unnumbered">Appendix 2 - Code for reproducibility</h1>
 <div id="refs" class="references csl-bib-body hanging-indent">
 <div id="ref-baraldi2010introduction" class="csl-entry">
 Baraldi, Amanda N., and Craig K. Enders. 2010. <span>“An Introduction to

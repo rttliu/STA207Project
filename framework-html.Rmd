@@ -210,13 +210,14 @@ library(dlookr)
 library(modelsummary)
 library(broom)
 library(forcats)
+library(cobalt)
 library(ggplot2)
+library(kableExtra)
 ```
 
 # Abstract
 
-Understanding what we can do to ensure students' academic success is highly important. While not all students' backgrounds are the same, we can try our best to control for what factors we can to give them the best chance at succeeding. This report explores the sustained effects of class size reduction on third-grade academic achievement in the Project STAR experiment. To address the severe non-random attrition (Attrition) challenge in the later stages of the experiment, we adopted a framework that combines multiple interpolation (MICE) and doubly robust estimation (Doubly Robust Estimation). The analysis results show that after correcting for attrition bias and controlling for relevant background variables, small class teaching (Small Class) has a significant causal gain of about 6.9 points on third-grade mathematics achievement. Sensitivity analysis confirmed the robustness of this conclusion under different missing mechanism assumptions.
-
+Understanding what we can do to ensure students' academic success is highly important. One potential factor to their success is class size. This report explores the longitudinal effects of small class sizes on academic achievement from kindergarten through third grade using data from the Tennessee Student/Teacher Achievement Ratio (STAR) project. To address the severe non-random attrition challenge in the later stages of the experiment, we adopted a framework that combines multiple interpolation (MICE) and doubly robust estimation. Our model itself is a mixed-effects model featuring both school and student level random intercepts to account for the clustered nature of the data. After correcting for attrition bias and controlling for relevant background variables, we find that the initial small class assignment in kindergarten has a significant causal gain of about 7.5 points on overall mathematics achievement. We also find that the advantage of small class assignment remains constant across all grades. Model diagnostics and sensitivity analyses indicate that this result remains robust.
 
 # Background and study design
 
@@ -226,30 +227,22 @@ In the STAR experiment, students entering kindergarten were randomly assigned wi
 
 Class size has long been a question for educators. **Smaller classes** may help young children by giving them more individual attention and improving classroom participation. The potential benefits of class size may be especially important in the **early grades**. However, reducing class size is expensive, since it requires more teachers, more classrooms and funding. This is a big challenge for underserved schools or districts, and had become an important equity concern in education. For this reason, a question arises: **whether the gains of small classes are worthy to justify the substantial costs of implementation**. [@schanzenbach2007star]
 
-Students were intended to stay in the same class-type assignment throughout the whole process. So the study was began with randomization, and all assignments was conducted within schools, the design helped balance school-level differences across treatment groups. This can be a good background for interpreting casual effects.
+Students ideally stayed in the same class-type assignment throughout the whole process. All assignments were conducted within schools, the design helped balance school-level differences across treatment groups. This can be a good background for interpreting casual effects as the study began with random assignment of treatment.
 
-Although STAR began with randomization, later studies have claimed that it is **not a completely randomized experiments**. Because the experiments are affected by factors such as student transfers, classroom reassignment, imperfect compliance, teacher changes, and missing follow-up data. When missing of the data is not at random, it can generate selection bias. Therefore, studies must address these post-randomization outcomes carefully.
+Unfortunately, later studies have claimed that it is **not a completely randomized experiments**. Due to factors such as student transfers, classroom reassignment, imperfect compliance, teacher changes, and missing follow-up data, the initial randomization effect of the experiment may have been lost. When missing of the data is not at random, it can generate selection bias. Therefore, studies must address these post-randomization outcomes carefully.
 
 
-## Some empirical complications violating randomization
+## Potential Emperical Complications that Violate Randomization
 
-- **Student mobility / transfers.**
+ - **Student mobility / transfers.** @chetty2011classroom
 
-@chetty2011classroom claimed that some students did not remain in their originally assigned classrooms or schools over time, and new entrants were also added in later grades. As a result, treatment exposure in later grades may differ from the initial assignment.
+ - **Noncompliance with original assignment.** @krueger1999star
+ 
+ - **Teacher changes and classroom reshuffling.** @chetty2011classroom
+ 
+ - **Peer Effect.** @cascio2007first
 
-- **Noncompliance with original assignment.**
-
-@krueger1999star shown that some students moved between class types after the initial random assignment. Therefore, observed class type in later grades would not always be consistent with original treatment assignment.
-
-- **Teacher changes and classroom reshuffling.**
-
-@chetty2011classroom shown that if students were exposed to different classroom environments over time, including new teachers in subsequent grades and changes in class composition. These post-randomization changes may affect achievement independently of the original class-size assignment.
-
-- **Peer Effect.**
-
-@cascio2007first argued that scores may depend also on the characteristics of classmates. Since classroom composition can affect learning outcomes, peer effects may operate alongside the direct effect of small classes and make interpretation of the treatment difficult.
-
-## Important Violations of Randomization - Selection Bias
+## Potential Substantial Violation of Randomization - Selection Bias
 
 One persistent concern of STAR Project is that there was substantial sample loss in the later years of the study, and this attrition may not have been entirely random. More broadly, @hanushek1999star identified attrition, crossovers, and selective test taking as threats to the integrity of STAR’s original randomization, and @filges2018classsize note that these remain central concerns in later assessments of the experiment.
 
@@ -263,35 +256,13 @@ One persistent concern of STAR Project is that there was substantial sample loss
 
 # Research Questions
 
-## Assumptions
-
-- **Stable Unit Treatment Value Assumption (SUTVA):**
-
-A first assumption is no interference. Each classroom’s potential outcome is assumed to be independent of the treatment assigned to other classrooms. The second assumption is no hidden versions of treatment. Small class should not contain multiple hidden versions of treatment.
-
-- **Positivity:**
-
-Within the relevant strata of background characteristics such as grade, race, free lunch status, and school context, there should be sufficient overlap so that no subgroup is deterministically assigned to only one class type.
-
-- **Conditional ignorability of attrition:**
-
-Conditional on the observed baseline covariates, treatment status, prior achievement, and other auxiliary variables related to student performance and participation, whether a student remains observed is assumed to be independent of the missing potential math outcomes.
-
-- **Random assignment at baseline:**
-
-At study entry, students were randomly assigned within schools to class types, so baseline treatment assignment can be treated as independent of students’ pre-treatment characteristics and potential outcomes.
-
-- **Exclusive Restriction:**
-
-Conditional on the class type actually received, the original random assignment affects math achievement only through treatment receipt, not through any direct channel such as parental responses, administrative reassignment, compliance behavior, etc.
-
 ## Questions of Interests
 
 Our main question of interest is
 
-Do students who are assigned to smaller classes achieve higher mathematics scores than those in regular classes? If so, does this relationship differ across grades K-3?
+Do students who are assigned to smaller classes achieve higher mathematics scores than those in regular classes? If so, does this advantage persist across grades K-3?
 
-We seek to answer these questions because we want to know whether or not these class assignments truly help students with their academic success. If it does, then we want to know if it persists throughout grades, therefore letting schools know that it is worth their time and resources to allocate for these smaller class sizes.
+We seek to answer these questions because we want to know whether or not these class assignments truly help students with their academic success. If it does, then we want to know if its effects persist throughout grades, therefore letting schools know that it is worth their time and resources to allocate for these smaller class sizes.
 
 # Exploratory Data Analysis
 
@@ -345,7 +316,7 @@ stars <- star %>%
 
 ## Data Cleaning and Preprocessing
 
-The dataset downloaded from Harvard Dataverse was first examined. It contains 11,601 observations and 379 variables, with a total of 2,477,601 missing entries. Given its large size and substantial amount of missing data, it is necessary to retain only variables relevant to the analysis. To address missing data, we will first assume that the data is MAR and apply imputation methods to estimate our missing values. We will later check the validity of these assumptions and whether or not they hold.
+The dataset downloaded from Harvard Dataverse was first examined. It contains 11,601 observations and 379 variables, with a total of 2,477,601 missing entries. Given its large size and substantial amount of missing data, it is necessary to retain only variables relevant to the analysis. To address missing data, we will first assume that the data is MAR and apply imputation methods to estimate our missing values. We will later check the validity of these assumptions and whether or not they hold. In addition, we also converted the data to longitudinal data. 
 
 ```{r phase-3}
 ## Phase 3: Renaming and Variable Type Conversion
@@ -369,7 +340,7 @@ stars_diag %>% dplyr::filter(if_all(where(is.factor), ~ !is.na(.))) %>% diagnose
 ```
 
   
-Following the Project STAR codebook, we recoded several categorical variables and collapsed categories when the original coding was too sparse for stable analysis. In particular, student race and teacher race were simplified to Black vs. Non-Black, since the STAR documentation shows that racial categories other than White and Black were extremely rare in the data. Teacher degree was reduced to Below Master versus Master or above, because specialist and doctoral categories were infrequent relative to the dominant bachelor’s/master’s groups. Teacher career stage was also collapsed into Lower level and Upper level, since the original multi-level ladder structure was highly imbalanced in practice.
+Following the Project STAR codebook, we recoded several categorical variables and collapsed categories when the original coding was too sparse for stable analysis. In particular, student race and teacher race were simplified to Black vs. Non-Black, since the STAR documentation shows that racial categories other than White and Black were extremely rare in the data. Teacher degree was reduced to Below Master versus Master or above, because specialist and doctoral categories were infrequent relative to the dominant bachelor’s/master’s groups. Teacher career stage was also collapsed into Lower level and Upper level, since the original multi-level ladder structure was highly imbalanced in practice. We also combined regular class and regular class with aide to just regular class since we were interested only in the effects of class size.
 
 
 ```{r phase-4}
@@ -439,7 +410,7 @@ A variable $Z$ acts as a confounder if it is associated with both the treatment 
 - **$Z \rightarrow Y$:** whether background characteristics are associated with math achievement.
 - **$Z \rightarrow X$ or $X \leftarrow Z \rightarrow Y$:** whether background characteristics are related to classroom assignment. 
 
-If these relationships hold, failing to control for $Z$ may bias estimates of the effect of class size on student outcomes. Therefore, these variables are included as controls in the subsequent analysis.
+If these relationships hold, failing to control for $Z$ may cause bias in the estimates of the effect of class size on student outcomes. Therefore, these variables are included as controls in the subsequent analysis.
 
 
 ### Verify **$X \rightarrow Y$:**
@@ -509,7 +480,7 @@ make_all_plots_violin(stars1, "math_score", cat_vars)
 
 The figure compares math score distributions across several student, teacher, and school characteristics. As we can see, some of the distribution of data has a strong violations of normality. So we use Kruskal--Wallis test to evaluate whether math scores differ across groups. Unlike the ANOVA, Kruskal--Wallis it is a nonparametric method based on ranks, which means that there are no normality assumption of data.
 
-The null hypothesis of Kruskal--Wallis is that the distributions of math scores are the same across all groups; equivalently, under a common-shape assumption, the group medians are equal. The alternative hypothesis is that at least one group differs from the others.
+The null hypothesis is that the distributions of math scores are the same across all groups; equivalently, under a common-shape assumption, the group medians are equal. The alternative hypothesis is that at least one group differs from the others.
 
 Because multiple tests are conducted across several covariates, we adopt a significance threshold of $\alpha =0.001$ to reduce the risk of false positives arising from multiple comparisons and the large sample size of the STAR dataset. The figure compares math score distributions across several student, teacher, and school characteristics. 
 
@@ -1438,6 +1409,8 @@ ggplot(comp_df, aes(x = Specification, y = Estimate, fill = Specification)) +
 
 # Discussion
 
+## Interpretation of Results
+
 ## Limitations
 
 Despite our best efforts to make our model as rigorous as possible, there are still some limitations within our study.
@@ -1450,8 +1423,292 @@ Our work heavily relies on the data to be Missing At Random. If in reality we do
 
 As extensive as the details of the STAR database is, there are still potential unobserved confounders lurking within the data. For example, school resources. These could be potential confounders as suppose a school only has enough resources to allocate a certain number of small classes. The school also could potentially have less resources for a student to consult with in regards with schoolwork. Thus, this would be a potential confounder as it affects both the treatment assignment of class type and the response of math score.
 
+### Academic Achievement
+
+While math score is a key indicator of academic achievement, it is not the only one. Other indicators of academic achievement include 
 
 
 # Conclusion
 
+After adjusting for potential confounders and addressing missing data issues via imputation methods, we conclude that there is a difference between 
+
 # References
+
+
+
+
+# Appendix A - Imputation Methodology
+
+For several variables that are regarded as time-invariant or relatively stable over time such as gender and race/ethnicity, we applied the Last Observation Carried Forward (LOCF) approach. This works by replacing the most recent previously observed value for the same student when the value was missing at a later wave.
+
+## Introduction of Key Methods
+
+Because our dataset contains a substantial proportion of incomplete cases across various waves, relying solely on complete-case analysis (IPW) would lead to severe information loss and biased estimates. Therefore, **we employ a rigorous two-step hybrid approach combining Multiple Imputation by Chained Equations (MICE) and Augmented Inverse Probability Weighting (AIPW).** First, we utilize MICE to address the **sheer volume of incomplete cases** by MICE. Second, because individual **student trajectories can be highly sparse over time**, we apply AIPW in the subsequent analysis phase. AIPW could be a correction for any residual bias caused by the sparsity of individual math trajectories and potential misspecifications during the MICE step.
+
+### MICE (Multiple Imputation by Chained Equations)
+
+**1. The Chained Equations (Conditional Imputation Models)**
+
+Let $V = (Y, X, Z, A)$ represent the full set of variables in our dataset, where $V_j$ denotes the $j$-th variable and $V_{-j}$ denotes all variables except $V_j$. The MICE algorithm operates by drawing missing values from a sequence of conditional distributions. For an iteration $t$, the missing values of variable $V_j$, denoted as $V_{j, mis}$, are drawn from the conditional distribution given the observed values $V_{j, obs}$ and the currently imputed values of all other variables:
+
+$$
+V_{j, mis}^{(t)} \sim P(V_j \mid V_1^{(t)}, \dots, V_{j-1}^{(t)}, V_{j+1}^{(t-1)}, \dots, V_p^{(t-1)}, \theta_j^{(t)})
+$$
+
+where $\theta_j^{(t)}$ is a vector of parameters specific to the conditional model for variable $V_j$ at iteration $t$.
+
+**2. Specific Models for Key Variables**
+
+Because our dataset contains a mix of continuous and categorical variables with varying distributions, we assign specific conditional models to different variable types:
+
+* **Continuous Variables** For students' class size and teaching years, we utilize **Predictive Mean Matching (PMM)**. PMM is a semi-parametric approach that relaxes the assumption of normality. For a student $i$ with a missing math score $Y_i$, PMM first estimates a predictive linear model:
+
+$$
+\hat{A}_{-i} = \beta_0 + \beta_X X_i + \beta_Z Z_i + \beta_A A_i
+$$
+
+* **Categorical Variables ($X$ and $Z$):** For categorical baseline characteristics with missing values (e.g., $Z$: `free_lunch`, `student_race`, `area_type`), we employ generalized linear models. For instance, if $Z_k$ is a binary precision variable (e.g., `free_lunch`), we use logistic regression:
+
+$$
+\text{logit}(P(Z_{k, i} = 1 \mid V_{-Z_k, i})) = \alpha_0 + \alpha^T V_{-Z_k, i}
+$$
+
+For categorical variables with more than two levels, multinomial logistic regression is applied.
+
+**3. Imputation Parameters**
+
+To adequately capture the uncertainty surrounding the missing data and the highly sparse regions of student performance, we set the number of multiple imputations to $m = 20$, generating 20 distinct, complete datasets. For each dataset, the chained equations run for $maxit = 10$ iterations to allow the conditional distributions to reach convergence, which will be verified visually via trace plots.
+
+**4. Assumptions**
+
+The validity of Multiple Imputation by Chained Equations (MICE) relies on several key statistical assumptions. Based on our previous diagnostic analyses, we align our imputation strategy with the following assumptions:
+
+* **Missing at Random (MAR):** We previously rejected the strict MCAR assumption, showing that missingness is tied to baseline traits. By including these precision variables and strong auxiliary predictors in the imputation model, we largely explain the missingness mechanism, making the MAR assumption highly plausible.
+* **Correct Model Specification:** To satisfy this, our predictor matrix incorporates the treatment variables ($X$), the outcome ($Y$), their interaction (class type $\times$ grade), and all identified precision ($Z$) and auxiliary ($A$) variables.
+* **Ignorability:** Our rich set of covariates sufficiently accounts for systematic differences between complete and incomplete cases, we can rely on the conditional distributions estimated by MICE without explicitly modeling the dropout probability.
+* **Compatibility of Conditional Distributions:** The sequence of conditional univariate models must be mutually compatible to converge to a valid stationary multivariate distribution. By utilizing standard generalized linear models, our MICE setup behaves robustly and satisfies the practical requirements of compatibility and convergence.
+
+
+### AIPW (Augmented Inverse Probability Weighting)
+
+While MICE focuses on recovering missing values in the dataset based on observed patterns, AIPW operates at the causal estimation phase. It does not impute missing values to create a new dataset; rather, it "imputes" the unobserved potential outcomes mathematically to estimate the Average Treatment Effect (ATE). It achieves this by modeling both the probability of treatment assignment and the expected outcome.
+
+**1. The Estimation and Correction Process**
+
+Let the treatment assignment $X \in \{0, 1\}$ denote the class type a student was assigned to, where $X=1$ represents assignment to a Small Class (the treatment) and $X=0$ represents assignment to a Regular Class (the control). The AIPW estimation on the imputed datasets proceeds in three steps:
+
+Firstly, we model the probability of a student receiving the treatment given their covariates, known as the propensity score: $\pi(Z_i) = P(X_i = 1 \mid Z_i)$. We use logistic regression to estimate $\hat{\pi}(Z_i)$. Inverse Probability Weighting (IPW) uses these scores to create a pseudo-population where treatment assignment is independent of measured confounders.
+
+Next, we model the expected math score given the treatment and covariates: $\mu_x(Z_i) = E[Y_i \mid X_i = x, Z_i]$. We fit regression models (or machine learning algorithms) to obtain the predicted expected outcomes $\hat{\mu}_1(Z_i)$ (if treated) and $\hat{\mu}_0(Z_i)$ (if control) for every student.
+
+AIPW estimates the counterfactual mean for treatment $x$ by augmenting the IPW estimator with predictions from the outcome model. The estimator for the expected potential outcome under treatment $X=1$ is constructed as:
+
+$$
+\hat{E}[Y^{(1)}] = \frac{1}{N} \sum_{i=1}^N \left[ \hat{\mu}_1(Z_i) + \frac{X_i}{\hat{\pi}(Z_i)} (Y_i - \hat{\mu}_1(Z_i)) \right]
+$$
+
+This formula elegantly corrects predictions: if the outcome model $\hat{\mu}_1(Z_i)$ makes an error (the residual $Y_i - \hat{\mu}_1(Z_i)$), it is scaled by the inverse probability weight to adjust for the bias. The Average Treatment Effect (ATE) is simply the difference between the AIPW estimates for treatment and control: $\hat{ATE} = \hat{E}[Y^{(1)}] - \hat{E}[Y^{(0)}]$.
+
+**2. Defending Our Causal Assumptions**
+
+By employing this doubly robust estimator, we directly operationalize and safeguard the core causal assumptions established earlier in our methodology:
+
+* **Safeguarding Positivity in Sparse Data:** As outlined in our assumptions, sufficient overlap (**Positivity**) is required across all strata. 
+* **Fortifying Conditional Ignorability:** Residual misspecification may still exist due to non-normality. AIPW offers a crucial "double-check" mechanism: it yields consistent and unbiased treatment effect estimates as long as *at least one* of the two models—either the outcome model or the propensity model—is correctly specified.
+
+## Imputations
+
+### Convergence check of MICE
+
+To assess the convergence and stability of the multiple imputation procedure. For each category of each time-varying categorical variable, we calculated the average proportion across the 20 imputed datasets, as well as the range (minimum–maximum) of the proportions across imputations. This helps evaluate whether the imputation model produces consistent distributions across completed datasets. Narrow ranges and similar average proportions indicate good stability of the MICE.
+
+
+```{r}
+imp_data <- readRDS("stars_mice_mids.rds")
+stars1_wide <- readRDS("stars1_wide_final.rds")
+n_imp <- imp_data$m
+cat_tv_vars <- intersect(c("class_type_K", "class_type_1", "class_type_2", "class_type_3",
+                           "free_lunch_K", "free_lunch_1", "free_lunch_2", "free_lunch_3",
+                           "teacher_degree_K", "teacher_degree_1", "teacher_degree_2", "teacher_degree_3",
+                           "teacher_career_K", "teacher_career_1", "teacher_career_2", "teacher_career_3",
+                           "teacher_race_K", "teacher_race_1", "teacher_race_2", "teacher_race_3"), 
+                         names(imp_data$data))
+
+prop_long <- map_dfr(cat_tv_vars, function(v) {
+  map_dfr(seq_len(imp_data$m), function(i) {
+    tab <- prop.table(table(complete(imp_data, i)[[v]], useNA = "no"))
+    tibble(variable = v, category = names(tab), imputation = i, proportion = as.numeric(tab))
+  })
+}) %>%
+  mutate(wave = case_when(str_detect(variable, "_K$") ~ "K",
+                          str_detect(variable, "_1$") ~ "Grade 1",
+                          str_detect(variable, "_2$") ~ "Grade 2",
+                          str_detect(variable, "_3$") ~ "Grade 3"),
+         base = str_remove(variable, "_(K|1|2|3)$"),
+         variable_label = recode(base, class_type="Class Type", free_lunch="Free Lunch Status", 
+                                 teacher_degree="Teacher Degree", teacher_career="Teacher Career Level", 
+                                 teacher_race="Teacher Race"))
+
+prop_table_paper <- prop_long %>%
+  group_by(variable_label, category, wave) %>%
+  summarise(display = sprintf("%.3f (%.3f, %.3f)", mean(proportion), min(proportion), max(proportion)), .groups = "drop") %>%
+  pivot_wider(names_from = wave, values_from = display) %>%
+  arrange(variable_label, category)
+```
+
+
+```{r}
+kbl(prop_table_paper,
+  caption = "Convergence Checking for Time-Varying Categorical Variables Across 20 Imputed Sets",
+  align = c("l", "l", "c", "c", "c", "c"), booktabs = TRUE, linesep = "") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed")) %>%
+  collapse_rows(columns = 1, valign = "top")
+
+```
+
+As shown in the table, the estimated proportions are highly stable across imputations. The ranges across imputations are very narrow for all categories and waves, typically differing by less than 0.02. For example, the proportion of students in regular classes ranges from 0.722 to 0.733 in Grade 1 and from 0.668 to 0.682 in Grade 3. Similar stability is observed for other variables, including free lunch status, teacher career level, teacher degree, and teacher race. Overall, the small variation across imputations indicates that the imputation algorithm converged well and produced consistent estimates across the multiple imputed datasets.
+
+### Stability of AIPW
+
+To assess the stability of the inverse probability weighting procedure, we examined the distribution of the estimated propensity scores and the corresponding IPW weights across the imputed datasets. For each completed dataset, propensity scores for remaining in the study through Grade 3 were estimated using baseline covariates, including student race, gender, birth year, free lunch status at kindergarten, and school area type. IPW weights were then constructed as the inverse of the estimated propensity score for students who remained in the study.
+
+**1. Distribution of Propensity Scores and AIPW Weights**
+
+We examined the distributions of the estimated propensity scores and AIPW weights to assess whether the weighting procedure was stable. Adequate overlap and the absence of extreme weights suggest that the resulting AIPW estimates are reliable and not unduly influenced by a small number of observations.
+
+
+```{r}
+
+m <- imp_data$m
+math_cols <- c("math_score_K", "math_score_1", "math_score_2", "math_score_3")
+dr_models_list <- vector("list", m)
+weight_dist_list <- vector("list", m)
+failed_idx <- integer(0)
+weight_diag_list <- vector("list", m)
+balance_list <- vector("list", m)
+
+for (i in 1:m) {
+  current_prepared <- complete(imp_data, i)
+  current_prepared$student_id <- stars1_wide$student_id
+  current_prepared$stayed_g3 <- stars1_wide$stayed_g3
+  for (s_id in c("school_id_K", "school_id_1", "school_id_2", "school_id_3")) {
+    current_prepared[[s_id]] <- stars1_wide[[s_id]]
+  }
+  for (col in math_cols) { current_prepared[[col]] <- stars1_wide[[col]] }
+
+  ps_fit <- glm(stayed_g3 ~ student_race + student_gender + birth_year + free_lunch_K + area_type_K, 
+                data = current_prepared, family = binomial())
+  pi_hat <- pmax(predict(ps_fit, type = "response"), 1e-6)
+  
+  current_prepared$ipw_weight <- ifelse(current_prepared$stayed_g3 == 1, 1 / pi_hat, 0)
+  current_prepared$balance_weight <- ifelse(current_prepared$stayed_g3 == 1, 1 / pi_hat, 1 / (1 - pi_hat))
+  current_prepared$ps_hat <- pi_hat
+  weight_dist_list[[i]] <- current_prepared %>%
+  dplyr::select(
+    student_id, stayed_g3, ps_hat, ipw_weight, balance_weight,
+    student_race, student_gender, birth_year, free_lunch_K, area_type_K
+  ) %>%
+  mutate(imputation = i)
+  bal_i <- bal.tab(stayed_g3 ~ student_race + student_gender + birth_year + free_lunch_K + area_type_K,
+                   data = current_prepared, weights = current_prepared$balance_weight,
+                   method = "weighting", estimand = "ATE", un = TRUE, s.d.denom = "pooled")
+  balance_list[[i]] <- bal_i
+  weight_diag_list[[i]] <- bal_i$Balance %>% as.data.frame() %>% 
+    tibble::rownames_to_column("covariate") %>% 
+    dplyr::select(covariate, Diff.Un, Diff.Adj) %>% mutate(imputation = i)
+
+  for (g in c("K", "1", "2", "3")) {
+    y_name <- paste0("math_score_", g); s_name <- paste0("school_id_", g); l_name <- paste0("free_lunch_", g)
+    formula_out <- as.formula(paste(y_name, "~ class_type_K + student_race + student_gender +", l_name, "+ area_type_K + (1 |", s_name, ")"))
+    out_fit <- lmer(formula_out, data = current_prepared[!is.na(current_prepared[[y_name]]), ])
+    m_hat <- predict(out_fit, newdata = current_prepared, allow.new.levels = TRUE)
+    y_obs <- current_prepared[[y_name]]
+    current_prepared[[paste0("dr_math_", g)]] <- m_hat + (as.numeric(!is.na(y_obs)) / pi_hat) * (tidyr::replace_na(y_obs, 0) - m_hat)
+  }
+
+  current_long <- current_prepared %>%
+    pivot_longer(cols = starts_with("dr_math_"), names_to = "grade", names_prefix = "dr_math_", values_to = "dr_outcome") %>%
+    mutate(grade = factor(grade, levels = c("K", "1", "2", "3")), student_id = factor(student_id), school_id_K = factor(school_id_K))
+    
+  fit_i <- tryCatch(lmer(dr_outcome ~ class_type_K * grade + student_race + free_lunch_K + (1 | school_id_K) + (1 | student_id), 
+                         data = current_long), error = function(e) e)
+  if (inherits(fit_i, "error")) {
+    failed_idx <- c(failed_idx, i)
+  } else {
+    dr_models_list[[i]] <- fit_i
+  }
+}
+```
+
+```{r}
+weight_dist_all <- bind_rows(weight_dist_list)
+ipw_data <- weight_dist_all %>% filter(ipw_weight > 0)
+diagnostic_table <- data.frame(
+  Statistic = c("Mean", "Standard deviation", "Minimum", "1st percentile", "5th percentile", "Median", "75th percentile", "95th percentile", "99th percentile", "Maximum"),
+  `Propensity Score` = c(
+    mean(ipw_data$ps_hat), sd(ipw_data$ps_hat), min(ipw_data$ps_hat),
+    quantile(ipw_data$ps_hat, c(0.01, 0.05)), median(ipw_data$ps_hat),
+    quantile(ipw_data$ps_hat, c(0.75, 0.95, 0.99)), max(ipw_data$ps_hat)
+  ),
+  `AIPW Weight` = c(
+    mean(ipw_data$ipw_weight), sd(ipw_data$ipw_weight), min(ipw_data$ipw_weight),
+    quantile(ipw_data$ipw_weight, c(0.01, 0.05)), median(ipw_data$ipw_weight),
+    quantile(ipw_data$ipw_weight, c(0.75, 0.95, 0.99)), max(ipw_data$ipw_weight)
+  )
+)
+diagnostic_table[,-1] <- lapply(diagnostic_table[,-1], function(x) sprintf("%.3f", x))
+
+kbl(diagnostic_table, caption = "Distribution of Propensity Scores and AIPW Weights", align = c("l","c","c"), booktabs = TRUE) %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+The table summarizes the distribution of the estimated propensity scores and IPW weights. The propensity scores had a mean of 0.54 (SD = 0.09) and ranged from 0.33 to 0.78, indicating that the overlap assumption has been statisfied across observations. The resulting IPW weights were well behaved, with a mean of 1.91 (SD = 0.35), a median of 1.90, and a maximum of 3.08. There are no extremely large weights, so the weighted data is unlikely to be driven by a small number of observations. Overall, positivity assumption was reasonably satisfied, there was no evidence of extreme weighting, and the subsequent AIPW estimation was likely to be stable.
+
+**2. Covariate Balance Before and After Weighting**
+
+Standardized mean differences (SMDs) were examined before and after weighting to assess whether IPW improved covariate balance between treatment groups. Because IPW aims to reduce confounding by creating a weighted pseudo-population with similar observed covariate distributions across groups, balance diagnostics provide an important check on whether the weighting procedure performed as intended.
+
+```{r}
+
+smd_all <- bind_rows(weight_diag_list)
+
+smd_summary <- smd_all %>%
+  group_by(covariate) %>%
+  summarise(
+    mean_smd_unweighted = mean(abs(Diff.Un), na.rm = TRUE),
+    min_smd_unweighted  = min(abs(Diff.Un), na.rm = TRUE),
+    max_smd_unweighted  = max(abs(Diff.Un), na.rm = TRUE),
+    mean_smd_weighted   = mean(abs(Diff.Adj), na.rm = TRUE),
+    min_smd_weighted    = min(abs(Diff.Adj), na.rm = TRUE),
+    max_smd_weighted    = max(abs(Diff.Adj), na.rm = TRUE)
+  ) %>%
+  arrange(desc(mean_smd_weighted))
+```
+
+
+```{r}
+smd_table_paper <- smd_summary %>%
+  mutate(
+    covariate = as.character(covariate) %>% str_replace_all("_", " ") %>% str_trim() %>%
+      str_replace("^student race.*", "Student race") %>%
+      str_replace("^student gender.*", "Student gender") %>%
+      str_replace("^birth year.*", "Birth year") %>%
+      str_replace("^free lunch K.*", "Free lunch") %>%
+      str_replace("^area type K.", "Area type:"),
+    `Unweighted SMD Mean` = sprintf("%.3f", mean_smd_unweighted),
+    `Unweighted SMD Range` = paste0(sprintf("%.3f", min_smd_unweighted), "-", sprintf("%.3f", max_smd_unweighted)),
+    `Weighted SMD Mean` = sprintf("%.3f", mean_smd_weighted),
+    `Weighted SMD Range` = paste0(sprintf("%.3f", min_smd_weighted), "-", sprintf("%.3f", max_smd_weighted))
+  ) %>%
+  select(Covariate = covariate, `Unweighted SMD Mean`, `Unweighted SMD Range`, `Weighted SMD Mean`, `Weighted SMD Range`)
+
+smd_table_paper %>%
+  kable(format = "html", align = "lcccc", caption = "Standardized Mean Differences Before and After Weighting") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+```
+
+The table summarizes the standardized mean differences (SMDs) of baseline covariates before and after weighting. Before weighting, several covariates showed moderate imbalance, with SMDs ranging from 0.015 to 0.129. After applying the weights, all covariates exhibited near-zero SMDs (0.000–0.005), and the ranges across imputed datasets were minimal. This indicates that the weighting procedure successfully achieved good covariate balance between the treatment groups.
+
+
+# Appendix 2 - Code for reproducibility
+
