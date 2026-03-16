@@ -215,7 +215,7 @@ library(ggplot2)
 
 # Abstract
 
-This report explores the sustained effects of class size reduction on third-grade academic achievement in the Project STAR experiment. To address the severe non-random attrition (Attrition) challenge in the later stages of the experiment, we adopted a framework that combines multiple interpolation (MICE) and doubly robust estimation (Doubly Robust Estimation). The analysis results show that after correcting for attrition bias and controlling for relevant background variables, small class teaching (Small Class) has a significant causal gain of about 6.9 points on third-grade mathematics achievement. Sensitivity analysis confirmed the robustness of this conclusion under different missing mechanism assumptions.
+Understanding what we can do to ensure students' academic success is highly important. While not all students' backgrounds are the same, we can try our best to control for what factors we can to give them the best chance at succeeding. This report explores the sustained effects of class size reduction on third-grade academic achievement in the Project STAR experiment. To address the severe non-random attrition (Attrition) challenge in the later stages of the experiment, we adopted a framework that combines multiple interpolation (MICE) and doubly robust estimation (Doubly Robust Estimation). The analysis results show that after correcting for attrition bias and controlling for relevant background variables, small class teaching (Small Class) has a significant causal gain of about 6.9 points on third-grade mathematics achievement. Sensitivity analysis confirmed the robustness of this conclusion under different missing mechanism assumptions.
 
 
 # Background and study design
@@ -287,11 +287,11 @@ Conditional on the class type actually received, the original random assignment 
 
 ## Questions of Interests
 
-- How robust are the estimated treatment effects under multiple missing-data imputation methods?
+Our main question of interest is
 
-- Whether missingness in math outcomes can be explained by observed background and prior-achievement variables, making a MAR-type assumption more plausible.
+Do students who are assigned to smaller classes achieve higher mathematics scores than those in regular classes? If so, does this relationship differ across grades K-3?
 
-- Whether students assigned to smaller classes achieve higher mathematics scores than those in regular classes and whether this relationship differs across grades K--3 after resolving selection bias.
+We seek to answer these questions because we want to know whether or not these class assignments truly help students with their academic success. If it does, then we want to know if it persists throughout grades, therefore letting schools know that it is worth their time and resources to allocate for these smaller class sizes.
 
 # Exploratory Data Analysis
 
@@ -345,7 +345,7 @@ stars <- star %>%
 
 ## Data Cleaning and Preprocessing
 
-The dataset downloaded from Harvard Dataverse was first examined. It contains 11,601 observations and 379 variables, with a total of 2,477,601 missing entries. Given its large size and substantial amount of missing data, it is necessary to retain only variables relevant to the analysis and to address missingness carefully.
+The dataset downloaded from Harvard Dataverse was first examined. It contains 11,601 observations and 379 variables, with a total of 2,477,601 missing entries. Given its large size and substantial amount of missing data, it is necessary to retain only variables relevant to the analysis. To address missing data, we will first assume that the data is MAR and apply imputation methods to estimate our missing values. We will later check the validity of these assumptions and whether or not they hold.
 
 ```{r phase-3}
 ## Phase 3: Renaming and Variable Type Conversion
@@ -613,149 +613,6 @@ The goal is to assess whether adding a covariate substantially changes the estim
 In this plot, the largest changes occur after adding free lunch status, area type and student’s race, while later adding teacher's degree and gender does not changes the coefficient of treatment effects. This suggests that these three variables account for the main confounding in the relationship of $Z \rightarrow X$ or adding $Z$ changes how $X \rightarrow Y$. Thus, in our final model we need to conditioning on the effects of free lunch status, area type and student’s race in order to accurately estimate the effect of treatment variable.
 
 
-## Analysis of missing mechanism
-
-- **MCAR (Missing Completely at Random)**: the probability of missingness is unrelated to both observed and unobserved data. In this case, missing values occur purely by chance, dropping incomplete cases does not introduce bias.
-
-- **MAR (Missing at Random)**: the probability of missingness may depend on observed variables, but conditional on those observed variables, it does not depend on the missing value itself.
-
-- **MNAR (Missing Not at Random)**: the probability of missingness still depends on the unobserved value itself, even after conditioning on observed data. This cannot be verified directly from the observed data alone, because the mechanism depends on values that are not observed.
-
-In practice, these mechanisms cannot usually be distinguished with certainty from the observed data alone, especially in distinguishing MAR and MNAR. Therefore, rather than attempting to verify MAR directly, we assess its plausibility indirectly using the following diagnostic strategies:
-
-- **Assess whether missingness is explainable by observed data**: model the missingness indicator using baseline covariates, lagged outcomes, and other observed variables. If missingness can be substantially explained by observed information, the MAR assumption becomes more plausible. [@rubin1976inference]
-
-- **Include strong auxiliary variables**: add variables that are highly predictive of the missing outcome or of the missingness process into the imputation or likelihood-based model. This can reduce bias and strengthen the plausibility of MAR. [@collins2001comparison]; [@white2011multiple]
-
-- **Check robustness under MAR-based methods**: compare results across approaches such as complete-case analysis, IPW, FIML, and MI under the same observed-data structure. Similar conclusions make MAR-based inference more credible. [@baraldi2010introduction]
-
-- **Conduct MNAR sensitivity analysis**: evaluate how conclusions change under plausible departures from MAR using methods such as pattern-mixture models, selection models, or delta-adjusted imputation. Stable results suggest that the main findings are not overly sensitive to violations of MAR. [@daniels2000simple]
-
-
-### Proving data is not MCAR
-
-Each student’s outcome record is summarized by a four-digit indicator over grades K, 1, 2, 3, where 1 denotes an observed math score and 0 denotes a missing math score. For example, 1111 indicates complete observation across all four grades and 1001 indicates a non-monotone pattern with observation in K and Grade 3 but missingness in between.
-
-We classified the K–3 observation patterns into five descriptive groups:
-
-- Pattern 1111 was defined as **complete cases**. 
-- Patterns 1110, 1100, 1000, 0100, and 0110 were grouped as **monotone attrition**, since once students entered a missing state, they did not subsequently return to full follow-up. 
-- Patterns 0011 and 0001 were classified as **late entry**, as observations only began in later grades.
-- Patterns 1010, 1001, 0101, 0010, and 1011 were classified as **intermittent**, reflecting non-monotone missingness with reappearance after one or more missing waves. 
-- Pattern 0111 was separated as **no records in K**, because it there are a specific group of students who hasn't got kindergarten but observed continuously from Grade 1 onward.
-
-```{r, fig.width=6, fig.height=4, out.width = "100%" }
-wide <- stars1 %>% mutate(obs = !is.na(math_score)) %>%
-  select(student_id, grade, obs) %>%
-  pivot_wider(names_from = grade, values_from = obs)
-
-wide <- wide %>% mutate(K = ifelse(is.na(K), FALSE, K),
-    `1` = ifelse(is.na(`1`), FALSE, `1`),
-    `2` = ifelse(is.na(`2`), FALSE, `2`),
-    `3` = ifelse(is.na(`3`), FALSE, `3`))
-
-wide <- wide %>% mutate(pattern = paste0(K*1, `1`*1, `2`*1, `3`*1))
-
-wide <- wide %>% filter(pattern != "0000") %>%
-  mutate(complete = ifelse(pattern == "1111", "Complete", "Incomplete"))
-
-stars_plot <- stars1 %>% left_join(wide %>% select(student_id, pattern), by = "student_id") %>%
-  filter(!is.na(pattern), pattern != "0000", !is.na(math_score))
-
-pattern_order <- stars_plot %>% distinct(student_id, pattern) %>% count(pattern, sort = TRUE) %>% pull(pattern)
-pattern_order <- c("1111", setdiff(pattern_order, "1111"))
-
-stars_plot2 <- stars1 %>%
-  left_join(wide %>% select(student_id, pattern), by = "student_id") %>%
-  filter(!is.na(pattern), pattern != "0000", !is.na(math_score)) %>%
-  mutate(pattern_class = case_when(pattern == "1111" ~ "Complete cases",
-      pattern %in% c("1110", "1100", "1000", "0100", "0110") ~ "Monotone attrition",
-      pattern %in% c("0011", "0001") ~ "Late entry",
-      pattern %in% c("1010", "1001", "0101", "0010", "1011") ~ "Intermittent",
-      pattern %in% "0111" ~ "No records in K",
-      TRUE ~ NA_character_)) %>%
-  filter(!is.na(pattern_class))
-
-class_count <- stars_plot2 %>% distinct(student_id, pattern_class) %>% count(pattern_class)
-
-class_labels <- class_count %>% mutate(label = paste0(pattern_class, "\n(n=", n, ")")) %>%
-  {setNames(.$label, .$pattern_class)}
-
-stars_plot2 <- stars_plot2 %>%
-  mutate(pattern_class = factor(pattern_class, 
-                                levels = c("Complete cases","Monotone attrition", 
-                                           "Late entry", "Intermittent", "No records in K")))
-
-p3 <- ggplot(stars_plot2, aes(x = pattern_class, y = math_score, fill = pattern_class)) +
-  geom_boxplot(outlier.alpha = 0.3) +
-  scale_x_discrete(labels = class_labels) +
-  labs(title = "Math score distribution by missingness type",
-    subtitle = "Scores pooled across grades K–3",
-    x = "Missingness type",
-    y = "Math score") +
-  theme_bw(base_size = 14) +
-  theme(plot.title = element_text(hjust = 0.5, size = 16),
-    plot.subtitle = element_text(hjust = 0.5, size = 13),
-    axis.title = element_text(size = 14),
-    axis.text.x = element_text(size = 12),
-    axis.text.y = element_text(size = 12),
-    legend.position = "none")
-p3 
-``` 
-
-The boxplot shows clear differences in pooled math-score distributions across missingness types from kindergarten to Grade 3. The pooled math-score distributions suggest that complete cases, intermittent cases, have broadly similar achievement levels. However, **the monotone attrition group has lower math score while the late-entry group shows significant higher math score among all categories**. The pattern suggests that missingness type is related to student performance, which is inconsistent with a purely MCAR mechanism. Thus, missingness type itself is informative and should be analyzed specifically.
-
-### Examine whether missingness can be explained by observed variables
-
-```{r}
-baseline_vars <- c("math_score", "free_lunch", "student_race",
-  "student_gender", "class_type", "area_type","class_size")
-
-stu_base <- stars1 %>% arrange(student_id, grade) %>%
-  group_by(student_id) %>% slice(1) %>%
-  ungroup() %>%
-  select(student_id, all_of(baseline_vars)) %>%
-  left_join(wide %>% select(student_id, complete), by = "student_id")
-
-tab <- CreateTableOne(vars = baseline_vars, strata = "complete",
-  data = stu_base, test = TRUE)
-tab_mat <- print(tab, smd = TRUE, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
-tab_df  <- as.data.frame(tab_mat)
-tab_df$Variable <- c("n", "Math score, mean (SD)", "Free lunch: Non-free lunch, n (%)",
-  "Student race: Non-Black, n (%)", "Student gender: Female, n (%)",
-  "Class type: Small class, n (%)",  "Area type, n (%)", "  Inner City", "  Rural",
-  "  Suburban", "  Urban", "Class size, mean (SD)")
-tab_df <- tab_df[, !names(tab_df) %in% "test"]
-tab_df <- tab_df[, c("Variable", setdiff(names(tab_df), "Variable"))]
-rownames(tab_df) <- NULL
-knitr::kable(tab_df, caption = "Baseline characteristics by completeness status")
-```
-
-The clear baseline differences between complete and incomplete cases suggest that missingness is associated with observed covariates, indicating that the process is at least partly explainable by observed data. This makes the MAR assumption more plausible than MCAR. And relative to complete cases, incomplete observations are more likely to come from students receiving free lunch, from Black students, and from inner-city schools. In contrast, class type is relatively balanced between the two groups, and motivation shows almost no difference.
-
-### Include strong auxiliary variables
-
-```{r}
-stars1 <- stars1 %>%
-  arrange(student_id, grade) %>%
-  group_by(student_id) %>%
-  mutate(math_lag1 = lag(math_score, 1),
-    math_lag2 = lag(math_score, 2),
-    math_lag3 = lag(math_score, 3)) %>% ungroup()
-cont_vars <- c("treads", "tlists", "wordsk", "motivr", "readbs", "mathbs", "math_lag1", "math_lag2", "math_lag3")
-
-cor_df <- map_dfr(cont_vars, function(v) {
-  tmp <- stars1 %>% select(math_score, all_of(v)) %>%
-    filter(!is.na(math_score), !is.na(.data[[v]]))
-  
-  tibble(variable = v, n = nrow(tmp),
-    correlation = cor(tmp$math_score, tmp[[v]], use = "complete.obs", method = "pearson"))
-}) %>% arrange(desc(abs(correlation)))
-
-cor_df
-```
-
-We examined the auxiliary variables including reading score (treads), word skills (wordsk), listening score (tlists), and lagged math scores. They have shown strong correlations with math achievement, which is informative for predicting missing math outcomes and can be included in the imputation model to reduce bias. This could be considered a case of satisfying the MAR assumption.
 
 # Inferential Analysis
 
@@ -1125,6 +982,153 @@ effect_by_grade %>%
 Table 2 makes the interaction model easier to interpret by converting the treatment main effect and the treatment-by-grade interaction terms into a single estimated small-class contrast for each grade. This presentation is especially helpful because the coefficient table alone does not directly show the total treatment effect outside the reference grade. If the estimates in Table 2 remain positive across grades, the evidence supports a sustained achievement advantage for the initially assigned small-class group; if they were to move toward zero or change sign, that would indicate attenuation or reversal of the early treatment benefit. In the present analysis, the grade-specific contrasts remain positive in every grade, although the earlier coefficient table shows that the changes over time are estimated with limited precision.
 
 # Model Diagnostics
+
+
+## Validity of MAR Assumption
+
+Data can be missing in 3 types of ways. 
+
+- **MCAR (Missing Completely at Random)**: the probability of missingness is unrelated to both observed and unobserved data. In this case, missing values occur purely by chance, dropping incomplete cases does not introduce bias.
+
+- **MAR (Missing at Random)**: the probability of missingness may depend on observed variables, but conditional on those observed variables, it does not depend on the missing value itself.
+
+- **MNAR (Missing Not at Random)**: the probability of missingness still depends on the unobserved value itself, even after conditioning on observed data. This cannot be verified directly from the observed data alone, because the mechanism depends on values that are not observed.
+
+In practice, these mechanisms cannot usually be distinguished with certainty from the observed data alone, especially in distinguishing MAR and MNAR. Therefore, rather than attempting to verify MAR directly, we assess its plausibility indirectly using the following diagnostic strategies:
+
+- **Assess whether missingness is explainable by observed data**: model the missingness indicator using baseline covariates, lagged outcomes, and other observed variables. If missingness can be substantially explained by observed information, the MAR assumption becomes more plausible. [@rubin1976inference]
+
+- **Include strong auxiliary variables**: add variables that are highly predictive of the missing outcome or of the missingness process into the imputation or likelihood-based model. This can reduce bias and strengthen the plausibility of MAR. [@collins2001comparison]; [@white2011multiple]
+
+- **Check robustness under MAR-based methods**: compare results across approaches such as complete-case analysis, IPW, FIML, and MI under the same observed-data structure. Similar conclusions make MAR-based inference more credible. [@baraldi2010introduction]
+
+- **Conduct MNAR sensitivity analysis**: evaluate how conclusions change under plausible departures from MAR using methods such as pattern-mixture models, selection models, or delta-adjusted imputation. Stable results suggest that the main findings are not overly sensitive to violations of MAR. [@daniels2000simple]
+
+
+### Proving data is not MCAR
+
+Each student’s outcome record is summarized by a four-digit indicator over grades K, 1, 2, 3, where 1 denotes an observed math score and 0 denotes a missing math score. For example, 1111 indicates complete observation across all four grades and 1001 indicates a non-monotone pattern with observation in K and Grade 3 but missingness in between.
+
+We classified the K–3 observation patterns into five descriptive groups:
+
+- Pattern 1111 was defined as **complete cases**. 
+- Patterns 1110, 1100, 1000, 0100, and 0110 were grouped as **monotone attrition**, since once students entered a missing state, they did not subsequently return to full follow-up. 
+- Patterns 0011 and 0001 were classified as **late entry**, as observations only began in later grades.
+- Patterns 1010, 1001, 0101, 0010, and 1011 were classified as **intermittent**, reflecting non-monotone missingness with reappearance after one or more missing waves. 
+- Pattern 0111 was separated as **no records in K**, because it there are a specific group of students who hasn't got kindergarten but observed continuously from Grade 1 onward.
+
+```{r, fig.width=6, fig.height=4, out.width = "100%" }
+wide <- stars1 %>% mutate(obs = !is.na(math_score)) %>%
+  select(student_id, grade, obs) %>%
+  pivot_wider(names_from = grade, values_from = obs)
+
+wide <- wide %>% mutate(K = ifelse(is.na(K), FALSE, K),
+    `1` = ifelse(is.na(`1`), FALSE, `1`),
+    `2` = ifelse(is.na(`2`), FALSE, `2`),
+    `3` = ifelse(is.na(`3`), FALSE, `3`))
+
+wide <- wide %>% mutate(pattern = paste0(K*1, `1`*1, `2`*1, `3`*1))
+
+wide <- wide %>% filter(pattern != "0000") %>%
+  mutate(complete = ifelse(pattern == "1111", "Complete", "Incomplete"))
+
+stars_plot <- stars1 %>% left_join(wide %>% select(student_id, pattern), by = "student_id") %>%
+  filter(!is.na(pattern), pattern != "0000", !is.na(math_score))
+
+pattern_order <- stars_plot %>% distinct(student_id, pattern) %>% count(pattern, sort = TRUE) %>% pull(pattern)
+pattern_order <- c("1111", setdiff(pattern_order, "1111"))
+
+stars_plot2 <- stars1 %>%
+  left_join(wide %>% select(student_id, pattern), by = "student_id") %>%
+  filter(!is.na(pattern), pattern != "0000", !is.na(math_score)) %>%
+  mutate(pattern_class = case_when(pattern == "1111" ~ "Complete cases",
+      pattern %in% c("1110", "1100", "1000", "0100", "0110") ~ "Monotone attrition",
+      pattern %in% c("0011", "0001") ~ "Late entry",
+      pattern %in% c("1010", "1001", "0101", "0010", "1011") ~ "Intermittent",
+      pattern %in% "0111" ~ "No records in K",
+      TRUE ~ NA_character_)) %>%
+  filter(!is.na(pattern_class))
+
+class_count <- stars_plot2 %>% distinct(student_id, pattern_class) %>% count(pattern_class)
+
+class_labels <- class_count %>% mutate(label = paste0(pattern_class, "\n(n=", n, ")")) %>%
+  {setNames(.$label, .$pattern_class)}
+
+stars_plot2 <- stars_plot2 %>%
+  mutate(pattern_class = factor(pattern_class, 
+                                levels = c("Complete cases","Monotone attrition", 
+                                           "Late entry", "Intermittent", "No records in K")))
+
+p3 <- ggplot(stars_plot2, aes(x = pattern_class, y = math_score, fill = pattern_class)) +
+  geom_boxplot(outlier.alpha = 0.3) +
+  scale_x_discrete(labels = class_labels) +
+  labs(title = "Math score distribution by missingness type",
+    subtitle = "Scores pooled across grades K–3",
+    x = "Missingness type",
+    y = "Math score") +
+  theme_bw(base_size = 14) +
+  theme(plot.title = element_text(hjust = 0.5, size = 16),
+    plot.subtitle = element_text(hjust = 0.5, size = 13),
+    axis.title = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.position = "none")
+p3 
+``` 
+
+The boxplot shows clear differences in pooled math-score distributions across missingness types from kindergarten to Grade 3. The pooled math-score distributions suggest that complete cases, intermittent cases, have broadly similar achievement levels. However, **the monotone attrition group has lower math score while the late-entry group shows significant higher math score among all categories**. The pattern suggests that missingness type is related to student performance, which is inconsistent with a purely MCAR mechanism. Thus, missingness type itself is informative and should be analyzed specifically.
+
+### Examine whether missingness can be explained by observed variables
+
+```{r}
+baseline_vars <- c("math_score", "free_lunch", "student_race",
+  "student_gender", "class_type", "area_type","class_size")
+
+stu_base <- stars1 %>% arrange(student_id, grade) %>%
+  group_by(student_id) %>% slice(1) %>%
+  ungroup() %>%
+  select(student_id, all_of(baseline_vars)) %>%
+  left_join(wide %>% select(student_id, complete), by = "student_id")
+
+tab <- CreateTableOne(vars = baseline_vars, strata = "complete",
+  data = stu_base, test = TRUE)
+tab_mat <- print(tab, smd = TRUE, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+tab_df  <- as.data.frame(tab_mat)
+tab_df$Variable <- c("n", "Math score, mean (SD)", "Free lunch: Non-free lunch, n (%)",
+  "Student race: Non-Black, n (%)", "Student gender: Female, n (%)",
+  "Class type: Small class, n (%)",  "Area type, n (%)", "  Inner City", "  Rural",
+  "  Suburban", "  Urban", "Class size, mean (SD)")
+tab_df <- tab_df[, !names(tab_df) %in% "test"]
+tab_df <- tab_df[, c("Variable", setdiff(names(tab_df), "Variable"))]
+rownames(tab_df) <- NULL
+knitr::kable(tab_df, caption = "Baseline characteristics by completeness status")
+```
+
+The clear baseline differences between complete and incomplete cases suggest that missingness is associated with observed covariates, indicating that the process is at least partly explainable by observed data. This makes the MAR assumption more plausible than MCAR. And relative to complete cases, incomplete observations are more likely to come from students receiving free lunch, from Black students, and from inner-city schools. In contrast, class type is relatively balanced between the two groups, and motivation shows almost no difference.
+
+### Include strong auxiliary variables
+
+```{r}
+stars1 <- stars1 %>%
+  arrange(student_id, grade) %>%
+  group_by(student_id) %>%
+  mutate(math_lag1 = lag(math_score, 1),
+    math_lag2 = lag(math_score, 2),
+    math_lag3 = lag(math_score, 3)) %>% ungroup()
+cont_vars <- c("treads", "tlists", "wordsk", "motivr", "readbs", "mathbs", "math_lag1", "math_lag2", "math_lag3")
+
+cor_df <- map_dfr(cont_vars, function(v) {
+  tmp <- stars1 %>% select(math_score, all_of(v)) %>%
+    filter(!is.na(math_score), !is.na(.data[[v]]))
+  
+  tibble(variable = v, n = nrow(tmp),
+    correlation = cor(tmp$math_score, tmp[[v]], use = "complete.obs", method = "pearson"))
+}) %>% arrange(desc(abs(correlation)))
+
+cor_df
+```
+
+We examined the auxiliary variables including reading score (treads), word skills (wordsk), listening score (tlists), and lagged math scores. They have shown strong correlations with math achievement, which is informative for predicting missing math outcomes and can be included in the imputation model to reduce bias. This could be considered a case of satisfying the MAR assumption.
 
 ## MICE Fills Quality and Convergence Diagnostics
 
