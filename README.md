@@ -2,7 +2,7 @@
 
 This repository contains the group project for **STA 207 - Statistical Research Methods II**. The project focuses on statistical modeling, analysis, and reproducible reporting. All code, data processing steps, and final results are maintained here to ensure transparency and collaborative development. 
 
-The project received a raw score of **19.2/20**. A 2-point deduction was applied due to the use of AI-assisted tools that did not fully comply with course policies. As a result, the final recorded score is 17.2/20.
+The project received a raw score of **19.2/20 (96%)**. A 2-point deduction was applied due to the use of AI-assisted tools that did not fully comply with course policies. As a result, the final recorded score is 17.2/20 (86%).
 
 # Longitudinal Effects of Small Class Sizes on Academic Achievement
 
